@@ -1,0 +1,7 @@
+# Local HTTPS server certificate & private key — NEVER publish these
+key.pem
+cert.pem
+_san.cnf
+
+# Dependencies
+node_modules/

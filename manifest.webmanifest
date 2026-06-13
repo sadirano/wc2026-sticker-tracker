@@ -1,0 +1,19 @@
+{
+  "name": "Sticker Tracker — Panini WC 2026",
+  "short_name": "Stickers",
+  "description": "Track your Panini FIFA World Cup 2026 stickers, scan codes with the camera, and spot duplicates.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%234f7cff'/%3E%3Ctext x='96' y='128' font-size='110' text-anchor='middle'%3E%E2%9A%BD%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
