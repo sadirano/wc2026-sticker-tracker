@@ -2,7 +2,8 @@
 
 /* ============================================================
    Sticker Tracker — Panini FIFA World Cup 2026
-   Fully client-side: IndexedDB storage, in-browser OCR.
+   Fully client-side: IndexedDB storage. Quick check & add,
+   photos (cropped) and notes per sticker.
    ============================================================ */
 
 /* ---------- tiny helpers ---------- */
@@ -19,7 +20,7 @@ function toast(msg) {
 }
 
 /* ============================================================
-   Code parsing — the heart of "read the sticker"
+   Code parsing — normalize what the user types into "ABC 12"
    ============================================================ */
 
 // Tokens that look like a code but are NOT the identifier.
@@ -31,9 +32,7 @@ const NOISE_WORDS = new Set([
 const MAX_NUM = 20; // max stickers per team in the album
 
 // Normalize a raw string into "ABC 12" form, or null if it isn't a valid code.
-// Numbers must be 1..20. Letters are NOT checked against the team list here
-// (this stays lenient for manual entry / import); team filtering happens on
-// OCR candidates via correctTeam().
+// Numbers must be 1..20 (FWC 00 is the lone exception).
 function normalizeCode(raw) {
   if (!raw) return null;
   const m = String(raw).toUpperCase().match(/([A-Z]{2,4})\s*[-·.]?\s*(\d{1,3})/);
@@ -44,20 +43,6 @@ function normalizeCode(raw) {
   const okZero = letters === "FWC" && num === 0; // the unique "00" stamp
   if (!okZero && !(num >= 1 && num <= MAX_NUM)) return null;
   return `${letters} ${num}`;
-}
-
-// All code-shaped candidates in a blob of text, in appearance order, deduped.
-function candidatesFromText(text) {
-  if (!text) return [];
-  const cleaned = text.toUpperCase().replace(/[^A-Z0-9\s]/g, " ");
-  const re = /([A-Z]{2,4})\s*(\d{1,3})/g;
-  const found = [];
-  let m;
-  while ((m = re.exec(cleaned))) {
-    const code = normalizeCode(`${m[1]} ${m[2]}`);
-    if (code) found.push(code);
-  }
-  return [...new Set(found)];
 }
 
 /* ---------- the full World Cup 2026 sticker checklist ----------
@@ -117,7 +102,6 @@ const TEAMS = [
   { code: "CC", name: "Coca-Cola", flag: "🥤", slots: 14 },
 ];
 const TEAM_BY_CODE = Object.fromEntries(TEAMS.map((t) => [t.code, t]));
-const VALID_TEAMS = TEAMS.map((t) => t.code);
 const DEFAULT_SLOTS = 20;
 // The sticker numbers on a team's page. FWC is special: 1–19 plus the unique
 // prefix-less "00" stamp (number 0) in the 20th spot.
@@ -135,40 +119,6 @@ function flagFor(code) {
   if (t.flag) return t.flag;
   if (t.iso) return t.iso.replace(/./g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
   return "🏳️";
-}
-
-function lev(a, b) {
-  const m = a.length, n = b.length;
-  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-  return dp[m][n];
-}
-
-// Map OCR letters to a known team. Returns the canonical code, or null to drop.
-function correctTeam(letters) {
-  if (VALID_TEAMS.includes(letters)) return letters;
-  let best = null, bd = 2; // allow a single-character OCR slip (e.g. FWG -> FWC)
-  for (const t of VALID_TEAMS) {
-    if (Math.abs(t.length - letters.length) > 1) continue;
-    const d = lev(letters, t);
-    if (d < bd) { bd = d; best = t; }
-  }
-  return best;
-}
-
-// Apply team correction/filtering to a list of "ABC 12" codes, dropping
-// numbers beyond that team's slot count (e.g. Coca-Cola only goes to 12).
-function applyTeamFilter(codes) {
-  const out = [];
-  for (const code of codes) {
-    const [letters, numStr] = code.split(" ");
-    const team = correctTeam(letters);
-    if (team && slotNumbersFor(team).includes(+numStr)) out.push(`${team} ${numStr}`);
-  }
-  return [...new Set(out)];
 }
 
 function teamOf(code) { return code.split(" ")[0]; }
@@ -239,8 +189,8 @@ async function addOrIncrement(code, { name = "", photo = "" } = {}) {
   if (existing) {
     existing.qty = (existing.qty || 1) + 1;
     existing.updatedAt = now;
-    if (name && !existing.name) existing.name = name;
-    if (photo && !existing.photo) existing.photo = photo;
+    if (name) existing.name = name;     // if the user bothered to add it, keep it
+    if (photo) existing.photo = photo;
     await DB.put(existing);
     return { item: existing, wasNew: false };
   }
@@ -259,134 +209,7 @@ async function setQty(code, qty) {
 }
 
 /* ============================================================
-   Image preprocessing for OCR — light touch on purpose.
-   Testing showed grayscale + upscale beats heavy binarization on
-   the low-contrast gray pill (Otsu thresholding destroyed it).
-   ============================================================ */
-function preprocess(srcCanvas) {
-  const longSide = Math.max(srcCanvas.width, srcCanvas.height);
-  const target = 1300; // upscale small crops, downscale huge photos
-  const scale = target / longSide;
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(srcCanvas.width * scale));
-  c.height = Math.max(1, Math.round(srcCanvas.height * scale));
-  const ctx = c.getContext("2d");
-  ctx.drawImage(srcCanvas, 0, 0, c.width, c.height);
-  // grayscale in place (no thresholding)
-  const img = ctx.getImageData(0, 0, c.width, c.height);
-  const d = img.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
-    d[i] = d[i + 1] = d[i + 2] = g;
-  }
-  ctx.putImageData(img, 0, 0);
-  return c;
-}
-
-function rotateCanvas(src, deg) {
-  const c = document.createElement("canvas");
-  const ctx = c.getContext("2d");
-  if (deg === 90 || deg === 270) { c.width = src.height; c.height = src.width; }
-  else { c.width = src.width; c.height = src.height; }
-  ctx.translate(c.width / 2, c.height / 2);
-  ctx.rotate((deg * Math.PI) / 180);
-  ctx.drawImage(src, -src.width / 2, -src.height / 2);
-  return c;
-}
-
-/* ============================================================
-   OCR — Tesseract worker, lazy-initialised
-   ============================================================ */
-let _worker = null;
-async function getWorker(onProgress) {
-  if (_worker) return _worker;
-  setStatus("Downloading recognizer (first time only)…", "busy");
-  _worker = await Tesseract.createWorker("eng", 1, {
-    logger: (m) => {
-      if (m.status === "recognizing text" && onProgress) onProgress(m.progress);
-    },
-  });
-  await _worker.setParameters({
-    tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ",
-    tessedit_pageseg_mode: "11", // sparse text
-  });
-  return _worker;
-}
-
-// Recognize one canvas, returning ranked code candidates.
-// We rank by Tesseract's per-line confidence × text height, because the real
-// code pill is the biggest, most confident text on the back — noise scores low.
-async function recognizeCandidates(canvas) {
-  const worker = await getWorker((p) => setStatus(`Reading… ${Math.round(p * 100)}%`, "busy"));
-  const { data } = await worker.recognize(preprocess(canvas));
-  const best = {};
-  const add = (code, score) => {
-    for (const c of applyTeamFilter([code])) if (!(c in best) || score > best[c]) best[c] = score;
-  };
-  for (const line of data.lines || []) {
-    const h = (line.bbox?.y1 - line.bbox?.y0) || 10;
-    for (const code of candidatesFromText(line.text)) add(code, (line.confidence || 1) * h);
-  }
-  // include anything the line pass missed (rare), with low score
-  for (const code of candidatesFromText(data.text || "")) add(code, 0);
-  return Object.keys(best).sort((a, b) => best[b] - best[a]);
-}
-
-// Try the given angles in order; return as soon as one yields candidates.
-async function ocrAngles(canvas, angles) {
-  let candidates = [];
-  for (const deg of angles) {
-    const rotated = deg ? rotateCanvas(canvas, deg) : canvas;
-    candidates = await recognizeCandidates(rotated);
-    if (candidates.length) return { candidates, angle: deg };
-  }
-  return { candidates: [], angle: null };
-}
-
-/* ============================================================
-   Camera
-   ============================================================ */
-const Cam = {
-  stream: null,
-  facing: "environment",
-  async start() {
-    this.stop();
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: this.facing }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
-    } catch (e) {
-      throw new Error(
-        location.protocol === "file:"
-          ? "Camera needs an https URL. Open from a hosted address, or use “Upload photo”."
-          : "Could not access camera: " + e.message
-      );
-    }
-    const v = $("#video");
-    v.srcObject = this.stream;
-    await v.play();
-    return v;
-  },
-  stop() {
-    if (this.stream) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = null; }
-  },
-  // Capture the full frame. The on-screen guide is just an aiming aid — we OCR
-  // the whole image so a slightly-misframed code isn't lost, and ranking +
-  // the team filter discard any background noise.
-  captureFull() {
-    const v = $("#video");
-    const vw = v.videoWidth, vh = v.videoHeight;
-    if (!vw) return null;
-    const c = $("#work");
-    c.width = vw; c.height = vh;
-    c.getContext("2d").drawImage(v, 0, 0, vw, vh);
-    return c;
-  },
-};
-
-/* ============================================================
-   Cropper — drag a box around the code, rotate, read
+   Image helpers — load a photo, crop it, store a small JPEG
    ============================================================ */
 function cropRegion(src, x, y, w, h) {
   const c = document.createElement("canvas");
@@ -396,19 +219,48 @@ function cropRegion(src, x, y, w, h) {
   return c;
 }
 
-const Cropper = {
-  source: null, scale: 1, rot: 0, sel: null, _bound: false,
+function canvasToDataUrl(canvas, max = 640) {
+  const scale = Math.min(1, max / Math.max(canvas.width, canvas.height));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(canvas.width * scale));
+  c.height = Math.max(1, Math.round(canvas.height * scale));
+  c.getContext("2d").drawImage(canvas, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.72);
+}
 
-  open(sourceCanvas) {
+function loadImageToCanvas(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      const max = 1600;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/* ============================================================
+   Cropper — modal overlay to keep only the important part
+   ============================================================ */
+const Cropper = {
+  source: null, scale: 1, sel: null, onDone: null, _bound: false,
+
+  open(sourceCanvas, onDone) {
     this.source = sourceCanvas;
-    this.rot = 0;
-    $("#result").hidden = true;
+    this.onDone = onDone;
     const box = $("#cropper");
     box.hidden = false;
 
     const stage = $("#crop-stage");
     const canvas = $("#crop-canvas");
-    const maxW = stage.clientWidth || 320;
+    const maxW = stage.clientWidth || Math.min(window.innerWidth - 60, 480);
     const maxH = Math.round(Math.min(window.innerHeight * 0.55, 520));
     let dispW = maxW;
     let dispH = Math.round((sourceCanvas.height / sourceCanvas.width) * dispW);
@@ -417,19 +269,13 @@ const Cropper = {
     canvas.getContext("2d").drawImage(sourceCanvas, 0, 0, dispW, dispH);
     this.scale = sourceCanvas.width / dispW;
 
-    // default selection: centered band (codes are short and wide-ish)
-    this.sel = { x: Math.round(dispW * 0.2), y: Math.round(dispH * 0.4), w: Math.round(dispW * 0.6), h: Math.round(dispH * 0.2) };
+    // default selection: centered box covering most of the photo
+    this.sel = { x: Math.round(dispW * 0.12), y: Math.round(dispH * 0.12), w: Math.round(dispW * 0.76), h: Math.round(dispH * 0.76) };
     this._drawSel();
-    $$(".rotbtn").forEach((b) => b.classList.toggle("active", b.dataset.rot === "0"));
     this._bind();
   },
 
-  close() { $("#cropper").hidden = true; this.source = null; },
-
-  setRot(deg) {
-    this.rot = deg;
-    $$(".rotbtn").forEach((b) => b.classList.toggle("active", +b.dataset.rot === deg));
-  },
+  close() { $("#cropper").hidden = true; this.source = null; this.onDone = null; },
 
   _drawSel() {
     const s = this.sel, el = $("#crop-sel");
@@ -464,138 +310,152 @@ const Cropper = {
       this._drawSel();
     });
     stage.addEventListener("pointerup", () => {
-      // ignore tiny accidental selections — keep previous if too small
-      if (this.sel.w < 12 || this.sel.h < 8) {
-        this.sel = { x: Math.round(canvas.width * 0.2), y: Math.round(canvas.height * 0.4), w: Math.round(canvas.width * 0.6), h: Math.round(canvas.height * 0.2) };
+      // ignore tiny accidental selections — keep a sensible default
+      if (this.sel.w < 16 || this.sel.h < 16) {
+        this.sel = { x: Math.round(canvas.width * 0.12), y: Math.round(canvas.height * 0.12), w: Math.round(canvas.width * 0.76), h: Math.round(canvas.height * 0.76) };
         this._drawSel();
       }
       start = null;
     });
   },
 
-  async read() {
+  useSelection() {
     if (!this.source) return;
     const s = this.sel;
-    const src = this.source;
-    const base = cropRegion(src, s.x * this.scale, s.y * this.scale, s.w * this.scale, s.h * this.scale);
-    setStatus("Reading selection…", "busy");
-    try {
-      const order = [this.rot, ...[0, 90, 270, 180].filter((a) => a !== this.rot)];
-      const { candidates, angle } = await ocrAngles(base, order);
-      setStatus("");
-      this.close();
-      const thumbCanvas = angle ? rotateCanvas(base, angle) : base;
-      await showResult(candidates, thumbCanvas,
-        candidates.length ? "Read from your selection — check it." : "Still couldn't read it — type the code below.",
-        src);
-    } catch (e) {
-      setStatus("OCR failed: " + e.message, "err");
-    }
+    const crop = cropRegion(this.source, s.x * this.scale, s.y * this.scale, s.w * this.scale, s.h * this.scale);
+    this._finish(canvasToDataUrl(crop));
+  },
+
+  useWhole() {
+    if (!this.source) return;
+    this._finish(canvasToDataUrl(this.source));
+  },
+
+  _finish(dataUrl) {
+    const cb = this.onDone;
+    this.close();
+    cb && cb(dataUrl);
   },
 };
 
+// Shared entry point: load a picked file and hand it to the cropper.
+async function pickPhoto(file, onDone) {
+  if (!file) return;
+  try {
+    const canvas = await loadImageToCanvas(file);
+    Cropper.open(canvas, onDone);
+  } catch {
+    toast("Couldn't load that image");
+  }
+}
+
 /* ============================================================
-   Scan flow + Result card
+   Quick check & add — the fast loop: type, see new/double, add,
+   stay on screen, repeat. No navigating away.
    ============================================================ */
-function setStatus(msg, cls = "") {
-  const el = $("#scan-status");
-  el.textContent = msg || "";
-  el.className = "scan-status" + (cls ? " " + cls : "");
+let qaPhoto = "";
+const recentCodes = []; // codes added this session, most-recent first
+
+function setQaPhoto(dataUrl) {
+  qaPhoto = dataUrl || "";
+  const thumb = $("#qa-thumb"), clear = $("#qa-photo-clear");
+  if (qaPhoto) { thumb.src = qaPhoto; thumb.hidden = false; clear.hidden = false; }
+  else { thumb.hidden = true; clear.hidden = true; }
 }
 
-let pendingPhoto = "";
-let lastSource = null; // full-res canvas behind the current result, for re-cropping
-
-function canvasToThumb(canvas, max = 360) {
-  const scale = Math.min(1, max / canvas.width);
-  const c = document.createElement("canvas");
-  c.width = Math.round(canvas.width * scale);
-  c.height = Math.round(canvas.height * scale);
-  c.getContext("2d").drawImage(canvas, 0, 0, c.width, c.height);
-  return c.toDataURL("image/jpeg", 0.7);
-}
-
-async function showResult(candidates, sourceCanvas, ocrNote, fullSource) {
-  const list = Array.isArray(candidates) ? candidates : candidates ? [candidates] : [];
-  const box = $("#result");
-  box.hidden = false;
-  lastSource = fullSource || sourceCanvas || null;
-  pendingPhoto = sourceCanvas ? canvasToThumb(sourceCanvas) : "";
-  const thumb = $("#result-thumb");
-  if (pendingPhoto) { thumb.src = pendingPhoto; thumb.hidden = false; } else { thumb.hidden = true; }
-  $("#result-recrop").hidden = !lastSource;
-
-  $("#result-code").value = list[0] || "";
-  renderChips(list);
-  $("#result-name").value = "";
-  $("#result-ocr-note").textContent = ocrNote || "";
-  await refreshResultBanner();
-  $("#result-code").focus();
-}
-
-function renderChips(list) {
-  const box = $("#result-chips");
-  box.innerHTML = "";
-  if (list.length < 2) { box.hidden = true; return; }
-  box.hidden = false;
-  const label = document.createElement("span");
-  label.className = "chips-label";
-  label.textContent = "Did you mean:";
-  box.appendChild(label);
-  list.slice(0, 6).forEach((code) => {
-    const b = document.createElement("button");
-    b.className = "chip";
-    b.textContent = code;
-    b.addEventListener("click", () => {
-      $("#result-code").value = code;
-      $$(".chip", box).forEach((c) => c.classList.toggle("active", c.textContent === code));
-      refreshResultBanner();
-    });
-    box.appendChild(b);
-  });
-}
-
-async function refreshResultBanner() {
-  const banner = $("#result-banner");
-  const dupeBtn = $("#result-dupe");
-  const addBtn = $("#result-add");
-  const code = normalizeCode($("#result-code").value);
+async function refreshQaBanner() {
+  const banner = $("#qa-banner");
+  const addBtn = $("#qa-add");
+  const dupeBtn = $("#qa-dupe");
+  const code = normalizeCode($("#qa-code").value);
   if (!code) {
     banner.hidden = true; dupeBtn.hidden = true;
-    addBtn.disabled = true; addBtn.textContent = "Enter a valid code";
+    addBtn.disabled = true; addBtn.textContent = "Enter a code";
     return;
   }
   addBtn.disabled = false;
   const existing = await DB.get(code);
   if (existing) {
     banner.hidden = false; banner.className = "banner dupe";
-    banner.textContent = `⚠ DUPLICATE — you already have ${code}` + (existing.qty > 1 ? ` (×${existing.qty})` : "") + ". It's a swap!";
+    banner.textContent = `⚠ DOUBLE — you already have ${code}` + (existing.qty > 1 ? ` (×${existing.qty})` : "") + ". It's a swap!";
     dupeBtn.hidden = false;
     addBtn.textContent = "Add anyway (+1)";
   } else {
     banner.hidden = false; banner.className = "banner new";
-    banner.textContent = `✅ NEW — ${code} is not in your collection yet`;
+    banner.textContent = `✅ NEW — ${code} isn't in your collection yet`;
     dupeBtn.hidden = true;
     addBtn.textContent = "Add to collection";
   }
 }
 
-async function commitResult() {
-  const code = normalizeCode($("#result-code").value);
+async function commitQuickAdd() {
+  const code = normalizeCode($("#qa-code").value);
   if (!code) { toast("That doesn't look like a valid code"); return; }
-  const name = $("#result-name").value.trim();
-  const { wasNew } = await addOrIncrement(code, { name, photo: pendingPhoto });
+  const name = $("#qa-name").value.trim();
+  const { wasNew } = await addOrIncrement(code, { name, photo: qaPhoto });
   toast(wasNew ? `Added ${code}` : `${code} → double counted`);
-  $("#result").hidden = true;
+  pushRecent(code);
+  // Reset for the next card — but stay right here.
+  $("#qa-code").value = ""; $("#qa-name").value = ""; setQaPhoto("");
   await renderStats();
-  // Jump to that country's album page so you can cross-check your physical album.
-  const team = teamOf(code);
-  if (TEAM_BY_CODE[team]) {
-    switchView("album");
-    openSlots(team);
-  } else if ($("#view-collection").classList.contains("active")) {
-    renderCollection();
-  }
+  await refreshQaBanner();
+  rerenderLists();
+  $("#qa-code").focus();
+}
+
+function pushRecent(code) {
+  const i = recentCodes.indexOf(code);
+  if (i >= 0) recentCodes.splice(i, 1);
+  recentCodes.unshift(code);
+  if (recentCodes.length > 12) recentCodes.length = 12;
+}
+
+function renderRecent() {
+  const box = $("#qa-recent");
+  const head = $("#qa-recent-head");
+  box.innerHTML = "";
+  const items = recentCodes.map((c) => _cache.find((x) => x.code === c)).filter(Boolean);
+  head.hidden = items.length === 0;
+  items.forEach((x) => box.appendChild(rowEl(x)));
+}
+
+/* ============================================================
+   Editor — add/replace a photo and edit the note on any sticker
+   ============================================================ */
+let editingCode = "";
+let editorPhoto = "";
+
+function setEditorPhoto(dataUrl) {
+  editorPhoto = dataUrl || "";
+  const thumb = $("#editor-thumb"), clear = $("#editor-photo-clear");
+  if (editorPhoto) { thumb.src = editorPhoto; thumb.hidden = false; clear.hidden = false; }
+  else { thumb.hidden = true; clear.hidden = true; }
+}
+
+async function openEditor(code) {
+  const item = await DB.get(code);
+  if (!item) return;
+  editingCode = code;
+  $("#editor-title").textContent = `Edit ${code}`;
+  $("#editor-name").value = item.name || "";
+  setEditorPhoto(item.photo || "");
+  $("#editor").hidden = false;
+}
+
+function closeEditor() { $("#editor").hidden = true; editingCode = ""; editorPhoto = ""; }
+
+async function saveEditor() {
+  if (!editingCode) return;
+  const item = await DB.get(editingCode);
+  if (!item) { closeEditor(); return; }
+  item.name = $("#editor-name").value.trim();
+  item.photo = editorPhoto;
+  item.updatedAt = Date.now();
+  await DB.put(item);
+  closeEditor();
+  await renderStats();
+  rerenderLists();
+  toast("Saved");
 }
 
 /* ============================================================
@@ -609,6 +469,14 @@ async function renderStats() {
   const total = _cache.reduce((s, x) => s + (x.qty || 1), 0);
   const doubles = _cache.reduce((s, x) => s + Math.max(0, (x.qty || 1) - 1), 0);
   $("#stats").innerHTML = `<b>${unique}</b> unique · <b>${total}</b> total${doubles ? ` · <b>${doubles}</b> doubles` : ""}`;
+}
+
+// Re-render any list currently showing rows (the recents on Quick add, the
+// Swaps list, the Album slots) after a change, without switching views.
+function rerenderLists() {
+  if ($("#view-collection").classList.contains("active")) renderCollection();
+  if ($("#view-quickadd").classList.contains("active")) renderRecent();
+  if ($("#view-album").classList.contains("active") && !$("#slots-panel").hidden) renderSlots();
 }
 
 function renderCollection() {
@@ -627,7 +495,7 @@ function renderCollection() {
 
   if (!items.length) {
     empty.classList.add("on");
-    empty.textContent = _cache.length ? "No stickers match your filters." : "Nothing yet. Scan a sticker to get started.";
+    empty.textContent = _cache.length ? "No stickers match your filters." : "Nothing yet. Add stickers in Quick add or fill the Album.";
     return;
   }
   empty.classList.remove("on");
@@ -661,8 +529,8 @@ function rowEl(x) {
   row.className = "row";
   const qty = x.qty || 1;
   row.innerHTML = `
-    <div class="thumb">${x.photo ? `<img src="${x.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : "🏷️"}</div>
-    <div class="meta">
+    <div class="thumb" data-act="edit" title="Edit photo / note">${x.photo ? `<img src="${x.photo}" alt="">` : "🏷️"}</div>
+    <div class="meta" data-act="edit">
       <div class="code">${x.code}</div>
       <div class="name">${x.name ? escapeHtml(x.name) : "—"}</div>
     </div>
@@ -676,8 +544,9 @@ function rowEl(x) {
       <button class="del" data-act="del" title="Remove">🗑</button>
     </div>`;
   row.addEventListener("click", async (e) => {
-    const act = e.target.dataset.act;
+    const act = e.target.closest("[data-act]")?.dataset.act;
     if (!act) return;
+    if (act === "edit") { openEditor(x.code); return; }
     if (act === "inc") await setQty(x.code, qty + 1);
     else if (act === "dec") await setQty(x.code, qty - 1);
     else if (act === "del") {
@@ -685,7 +554,7 @@ function rowEl(x) {
       await DB.del(x.code);
     }
     await renderStats();
-    renderCollection();
+    rerenderLists();
   });
   return row;
 }
@@ -853,44 +722,27 @@ async function importJSON(file) {
       added++;
     }
   }
-  await renderStats(); renderCollection();
+  await renderStats(); rerenderLists();
   toast(`Imported — ${added} new, ${merged} merged`);
-}
-
-/* ============================================================
-   File upload (scan from an existing photo)
-   ============================================================ */
-function loadImageToCanvas(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement("canvas");
-      const max = 1600;
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(img.src);
-      resolve(c);
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
 }
 
 /* ============================================================
    Navigation
    ============================================================ */
-const VIEW_TITLES = { album: "Album", scan: "Scan", collection: "Swaps & doubles", backup: "Backup" };
+const VIEW_TITLES = { quickadd: "Quick add", album: "Album", collection: "Swaps & doubles", backup: "Backup" };
 
 function switchView(name) {
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + name));
   $$(".menu-item").forEach((m) => m.classList.toggle("active", m.dataset.view === name));
   $("#view-title").textContent = VIEW_TITLES[name] || "Sticker Tracker";
   closeMenu();
-  if (name !== "scan") Cam.stop();
   if (name === "collection") renderCollection();
   if (name === "album") { $("#slots-panel").hidden = true; $("#album-browse").hidden = false; renderAlbum(); }
+  if (name === "quickadd") {
+    refreshQaBanner();
+    renderRecent();
+    setTimeout(() => $("#qa-code").focus(), 50);
+  }
 }
 
 function openMenu() { $("#menu").hidden = false; }
@@ -908,6 +760,35 @@ async function main() {
   $("#menu").addEventListener("click", (e) => { if (e.target.id === "menu") closeMenu(); });
   $$(".menu-item").forEach((m) => m.addEventListener("click", () => switchView(m.dataset.view)));
 
+  // Quick check & add
+  $("#qa-code").addEventListener("input", refreshQaBanner);
+  $("#qa-code").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !$("#qa-add").disabled) commitQuickAdd();
+  });
+  $("#qa-add").addEventListener("click", commitQuickAdd);
+  $("#qa-dupe").addEventListener("click", commitQuickAdd);
+  $("#qa-photo").addEventListener("change", (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    pickPhoto(f, setQaPhoto);
+  });
+  $("#qa-photo-clear").addEventListener("click", () => setQaPhoto(""));
+
+  // Cropper overlay
+  $("#crop-use").addEventListener("click", () => Cropper.useSelection());
+  $("#crop-full").addEventListener("click", () => Cropper.useWhole());
+  $("#crop-cancel").addEventListener("click", () => Cropper.close());
+  $("#cropper").addEventListener("click", (e) => { if (e.target.id === "cropper") Cropper.close(); });
+
+  // Editor overlay (existing sticker: photo + note)
+  $("#editor-photo").addEventListener("change", (e) => {
+    const f = e.target.files[0]; e.target.value = "";
+    pickPhoto(f, setEditorPhoto);
+  });
+  $("#editor-photo-clear").addEventListener("click", () => setEditorPhoto(""));
+  $("#editor-save").addEventListener("click", saveEditor);
+  $("#editor-close").addEventListener("click", closeEditor);
+  $("#editor").addEventListener("click", (e) => { if (e.target.id === "editor") closeEditor(); });
+
   // Album
   $("#album-search").addEventListener("input", renderAlbum);
   $("#slots-back").addEventListener("click", closeSlots);
@@ -915,71 +796,6 @@ async function main() {
   $("#slots-next").addEventListener("click", () => stepCountry(1));
   $("#slots-all").addEventListener("click", () => markAllSlots(true));
   $("#slots-none").addEventListener("click", () => markAllSlots(false));
-
-  // Camera
-  $("#btn-start").addEventListener("click", async () => {
-    try {
-      await Cam.start();
-      $("#guide").classList.add("on");
-      $("#btn-start").hidden = true;
-      $("#btn-capture").hidden = false;
-      $("#btn-flip").hidden = false;
-      setStatus("Point at the code box and tap “Scan code”.");
-    } catch (e) { setStatus(e.message, "err"); }
-  });
-
-  $("#btn-flip").addEventListener("click", async () => {
-    Cam.facing = Cam.facing === "environment" ? "user" : "environment";
-    try { await Cam.start(); } catch (e) { setStatus(e.message, "err"); }
-  });
-
-  $("#btn-capture").addEventListener("click", async () => {
-    const canvas = Cam.captureFull();
-    if (!canvas) { setStatus("Camera not ready yet.", "err"); return; }
-    $("#btn-capture").disabled = true;
-    try {
-      const { candidates } = await ocrAngles(canvas, [0, 90, 270]);
-      setStatus("");
-      await showResult(candidates, canvas,
-        candidates.length ? "Best guess below — tap a suggestion or edit." : "Couldn't read it — tap “Crop the code yourself”, or type below.",
-        canvas);
-    } catch (e) {
-      setStatus("OCR failed: " + e.message, "err");
-    } finally {
-      $("#btn-capture").disabled = false;
-    }
-  });
-
-  // Upload a photo (desktop, or the sample photos) — auto-read the whole frame,
-  // with the cropper as a one-tap fallback if the guess is wrong.
-  $("#file-upload").addEventListener("change", async (e) => {
-    const file = e.target.files[0];
-    e.target.value = "";
-    if (!file) return;
-    setStatus("Reading photo…", "busy");
-    try {
-      const canvas = await loadImageToCanvas(file);
-      const { candidates } = await ocrAngles(canvas, [0, 90, 270]);
-      setStatus("");
-      await showResult(candidates, canvas,
-        candidates.length ? "Best guess below — check it, tap a suggestion, or edit." : "Couldn't read it — tap “Crop the code yourself”, or type.",
-        canvas);
-    } catch (err) {
-      setStatus("Could not process image: " + err.message, "err");
-    }
-  });
-
-  // Cropper controls
-  $$(".rotbtn").forEach((b) => b.addEventListener("click", () => Cropper.setRot(+b.dataset.rot)));
-  $("#crop-read").addEventListener("click", () => Cropper.read());
-  $("#crop-cancel").addEventListener("click", () => { Cropper.close(); setStatus(""); });
-  $("#result-recrop").addEventListener("click", () => { if (lastSource) Cropper.open(lastSource); });
-
-  // Result card
-  $("#result-code").addEventListener("input", refreshResultBanner);
-  $("#result-close").addEventListener("click", () => ($("#result").hidden = true));
-  $("#result-add").addEventListener("click", commitResult);
-  $("#result-dupe").addEventListener("click", commitResult);
 
   // Collection (swaps)
   $("#search").addEventListener("input", renderCollection);
@@ -996,7 +812,7 @@ async function main() {
   $("#btn-wipe").addEventListener("click", async () => {
     if (!confirm("Erase your ENTIRE collection? This cannot be undone (export a backup first).")) return;
     await DB.clear();
-    await renderStats(); renderCollection();
+    await renderStats(); rerenderLists();
     toast("Collection erased");
   });
 

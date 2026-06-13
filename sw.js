@@ -1,5 +1,5 @@
-/* Minimal offline cache. Tesseract assets are cached on first use by the browser. */
-const CACHE = "sticker-tracker-v1";
+/* Minimal offline cache for the app shell. */
+const CACHE = "sticker-tracker-v2";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
@@ -16,7 +16,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   // Cache-first with network fallback; successful responses are cached so the
-  // app (and the Tesseract CDN assets) keep working offline after first load.
+  // app keeps working offline after the first load.
   e.respondWith(
     caches.match(e.request).then((cached) => {
       const network = fetch(e.request)

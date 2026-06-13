@@ -1,7 +1,7 @@
 {
   "name": "Sticker Tracker — Panini WC 2026",
   "short_name": "Stickers",
-  "description": "Track your Panini FIFA World Cup 2026 stickers, scan codes with the camera, and spot duplicates.",
+  "description": "Track your Panini FIFA World Cup 2026 stickers, quickly check new vs. doubles, and add photos and notes.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -23,78 +23,42 @@
   <!-- Slide-down menu -->
   <div id="menu" class="menu-overlay" hidden>
     <div class="menu-sheet">
+      <button class="menu-item" data-view="quickadd"><span>⚡</span> Quick check &amp; add</button>
       <button class="menu-item" data-view="album"><span>📖</span> Album</button>
-      <button class="menu-item" data-view="scan"><span>📷</span> Scan a sticker</button>
       <button class="menu-item" data-view="collection"><span>🔁</span> Swaps &amp; doubles</button>
       <button class="menu-item" data-view="backup"><span>💾</span> Backup &amp; restore</button>
     </div>
   </div>
 
   <main>
-    <!-- SCAN -->
-    <section id="view-scan" class="view">
-      <div class="scanner">
-        <video id="video" playsinline autoplay muted></video>
-        <div class="guide" id="guide">
-          <div class="guide-box"></div>
-          <p class="guide-hint">Fit the <b>code box</b> here · hold it upright</p>
-        </div>
-        <canvas id="work" hidden></canvas>
-      </div>
-
-      <div class="scan-controls">
-        <button id="btn-start" class="btn primary">Start camera</button>
-        <button id="btn-capture" class="btn primary big" hidden>Scan code</button>
-        <button id="btn-flip" class="btn ghost" hidden title="Switch camera">⟲</button>
-        <label class="btn ghost" for="file-upload">Upload photo</label>
-        <input id="file-upload" type="file" accept="image/*" hidden />
-      </div>
-
-      <div id="scan-status" class="scan-status"></div>
-
-      <!-- Cropper: drag a box around the code, then read -->
-      <div id="cropper" class="cropper" hidden>
-        <p class="crop-hint">Drag a box around <b>just the code</b>, rotate it upright, then Read.</p>
-        <div class="crop-stage" id="crop-stage">
-          <canvas id="crop-canvas"></canvas>
-          <div id="crop-sel" class="crop-sel"></div>
-        </div>
-        <div class="rot-group">
-          <span class="muted small">Rotate:</span>
-          <button class="rotbtn active" data-rot="0">0°</button>
-          <button class="rotbtn" data-rot="90">90°</button>
-          <button class="rotbtn" data-rot="180">180°</button>
-          <button class="rotbtn" data-rot="270">270°</button>
-        </div>
-        <div class="crop-actions">
-          <button id="crop-read" class="btn primary">Read selection</button>
-          <button id="crop-cancel" class="btn ghost">Cancel</button>
-        </div>
-      </div>
-
-      <!-- Result card (shown after a scan) -->
-      <div id="result" class="result" hidden>
-        <div class="result-head">
-          <h2 id="result-title">Result</h2>
-          <button id="result-close" class="icon-btn" aria-label="Close">✕</button>
-        </div>
-        <img id="result-thumb" class="result-thumb" alt="" hidden />
-        <button id="result-recrop" class="btn ghost small" hidden>✂ Wrong read? Crop the code yourself</button>
+    <!-- QUICK ADD — type a code, see new/double, add without leaving -->
+    <section id="view-quickadd" class="view">
+      <div class="card pad quick-card">
+        <p class="quick-lead">Grab any card, type its code, and instantly see if it's <b>new</b> or a <b>double</b>. Add it without leaving this screen.</p>
         <label class="field">
           <span>Code</span>
-          <input id="result-code" class="code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. USA 11" />
+          <input id="qa-code" class="code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. USA 11" />
         </label>
-        <div id="result-chips" class="chips" hidden></div>
-        <p id="result-ocr-note" class="ocr-note"></p>
+        <div id="qa-banner" class="banner" hidden></div>
         <label class="field">
           <span>Name / note (optional)</span>
-          <input id="result-name" autocomplete="off" placeholder="Player or sticker name" />
+          <input id="qa-name" autocomplete="off" placeholder="Player or sticker name" />
         </label>
-        <div id="result-banner" class="banner" hidden></div>
-        <div class="result-actions">
-          <button id="result-add" class="btn primary">Add to collection</button>
-          <button id="result-dupe" class="btn warn" hidden>It's a double (+1)</button>
+        <div class="photo-row">
+          <label class="btn ghost" for="qa-photo">📷 Add photo</label>
+          <input id="qa-photo" type="file" accept="image/*" capture="environment" hidden />
+          <img id="qa-thumb" class="photo-thumb" alt="" hidden />
+          <button id="qa-photo-clear" class="icon-btn" hidden title="Remove photo">✕</button>
         </div>
+        <div class="result-actions">
+          <button id="qa-add" class="btn primary big" disabled>Enter a code</button>
+          <button id="qa-dupe" class="btn warn" hidden>It's a double (+1)</button>
+        </div>
+      </div>
+
+      <div class="quick-recent">
+        <div class="team-head" id="qa-recent-head" hidden>Just added</div>
+        <div id="qa-recent" class="collection"></div>
       </div>
     </section>
 
@@ -142,7 +106,7 @@
         <label class="chk"><input type="checkbox" id="only-dupes" /> Only doubles (swaps)</label>
       </div>
       <div id="collection-list" class="collection"></div>
-      <div id="collection-empty" class="empty">Nothing yet. Scan a sticker or fill the Album.</div>
+      <div id="collection-empty" class="empty">Nothing yet. Add stickers in Quick add or fill the Album.</div>
     </section>
 
     <!-- BACKUP -->
@@ -160,17 +124,55 @@
         <button id="btn-wipe" class="btn danger">Erase everything</button>
       </div>
       <div class="card pad muted small">
-        <p><b>Tip:</b> For camera scanning on your phone, host these files on a secure (https) URL such as GitHub Pages, then “Add to Home Screen”. The first scan downloads the recognizer (~a few MB) and then works offline.</p>
+        <p><b>Tip:</b> Add this app to your Home Screen for a full-screen, offline experience. Photos you attach are stored in this browser — export a JSON backup to keep them safe.</p>
       </div>
     </section>
   </main>
+
+  <!-- Crop overlay: keep only the important part of a photo -->
+  <div id="cropper" class="overlay" hidden>
+    <div class="sheet cropper-sheet">
+      <p class="crop-hint">Drag a box around the part you want to keep.</p>
+      <div class="crop-stage" id="crop-stage">
+        <canvas id="crop-canvas"></canvas>
+        <div id="crop-sel" class="crop-sel"></div>
+      </div>
+      <div class="crop-actions">
+        <button id="crop-use" class="btn primary">Use selection</button>
+        <button id="crop-full" class="btn ghost">Whole photo</button>
+        <button id="crop-cancel" class="btn ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit overlay: photo + note for an existing sticker -->
+  <div id="editor" class="overlay" hidden>
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 id="editor-title">Edit sticker</h2>
+        <button id="editor-close" class="icon-btn" aria-label="Close">✕</button>
+      </div>
+      <img id="editor-thumb" class="photo-thumb big" alt="" hidden />
+      <div class="photo-row">
+        <label class="btn ghost" for="editor-photo">📷 Add / replace photo</label>
+        <input id="editor-photo" type="file" accept="image/*" capture="environment" hidden />
+        <button id="editor-photo-clear" class="icon-btn" hidden title="Remove photo">✕</button>
+      </div>
+      <label class="field">
+        <span>Name / note</span>
+        <input id="editor-name" autocomplete="off" placeholder="Player or sticker name" />
+      </label>
+      <div class="result-actions">
+        <button id="editor-save" class="btn primary">Save</button>
+      </div>
+    </div>
+  </div>
 
   <a class="gh-badge" href="https://github.com/sadirano" target="_blank" rel="noopener noreferrer" aria-label="Made by @sadirano on GitHub">
     <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
     <span>@sadirano</span>
   </a>
 
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
