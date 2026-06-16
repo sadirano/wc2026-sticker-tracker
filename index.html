@@ -13,7 +13,7 @@
     <div class="brand">
       <span class="logo">⚽</span>
       <span id="view-title">Album</span>
-      <span id="active-profile" class="profile-chip"></span>
+      <span id="active-profile" class="profile-chip" hidden></span>
     </div>
     <div class="topbar-right">
       <div class="stats" id="stats"></div>
@@ -25,14 +25,18 @@
   <div id="menu" class="menu-overlay" hidden>
     <div class="menu-sheet">
       <div class="menu-profile">
-        <span class="menu-profile-label">Viewing</span>
+        <span class="menu-profile-label" data-i18n="menu.viewing">Viewing</span>
         <select id="profile-select" class="select"></select>
       </div>
+      <div class="menu-lang">
+        <button class="lang-btn" data-lang="en">EN</button>
+        <button class="lang-btn" data-lang="pt">PT-BR</button>
+      </div>
       <div class="menu-sep"></div>
-      <button class="menu-item" data-view="quickadd"><span>⚡</span> Quick check &amp; add</button>
-      <button class="menu-item" data-view="album"><span>📖</span> Album</button>
-      <button class="menu-item" data-view="collection"><span>🔁</span> Swaps &amp; doubles</button>
-      <button class="menu-item" data-view="backup"><span>💾</span> Share &amp; backup</button>
+      <button class="menu-item" data-view="quickadd"><span>⚡</span> <span data-i18n="menu.quickadd">Quick check &amp; add</span></button>
+      <button class="menu-item" data-view="album"><span>📖</span> <span data-i18n="menu.album">Album</span></button>
+      <button class="menu-item" data-view="collection"><span>🔁</span> <span data-i18n="menu.collection">Swaps &amp; doubles</span></button>
+      <button class="menu-item" data-view="backup"><span>💾</span> <span data-i18n="menu.backup">Share &amp; backup</span></button>
     </div>
   </div>
 
@@ -40,25 +44,24 @@
     <!-- QUICK ADD — type a code, see new/double, add without leaving -->
     <section id="view-quickadd" class="view">
       <div class="card pad quick-card">
-        <p class="quick-lead">Grab any card, type its code, and instantly see if it's <b>new</b> or a <b>double</b>. Add it without leaving this screen.</p>
+        <p class="quick-lead" data-i18n-html="qa.lead">Grab any card, type its code, and instantly see if it's <b>new</b> or a <b>double</b>. Add it without leaving this screen.</p>
         <div class="field">
-          <span>Code</span>
+          <span data-i18n="qa.code">Code</span>
           <div class="qa-entry">
-            <div id="qa-indicator" class="qa-indicator" hidden></div>
-            <input id="qa-code" class="code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. USA 11" />
+            <div id="qa-indicator" class="qa-indicator"></div>
+            <input id="qa-code" class="code-input" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="USA 11" data-i18n-ph="qa.codePh" />
             <button id="qa-clear" class="qa-clear" hidden aria-label="Clear">✕</button>
             <button id="qa-add" class="qa-plus" disabled aria-label="Add">+1</button>
           </div>
         </div>
-        <div id="qa-banner" class="banner" hidden></div>
         <label class="field">
-          <span>Name / note (optional)</span>
-          <input id="qa-name" autocomplete="off" placeholder="Player or sticker name" />
+          <span data-i18n="qa.name">Name / note (optional)</span>
+          <input id="qa-name" autocomplete="off" placeholder="Player or sticker name" data-i18n-ph="qa.namePh" />
         </label>
       </div>
 
       <div class="quick-recent">
-        <div class="team-head" id="qa-recent-head" hidden>Just added</div>
+        <div class="team-head" id="qa-recent-head" hidden data-i18n="qa.recent">Just added</div>
         <div id="qa-recent" class="collection"></div>
       </div>
     </section>
@@ -67,7 +70,7 @@
     <section id="view-album" class="view active">
       <div id="album-browse">
         <div class="toolbar">
-          <input id="album-search" class="search" placeholder="Find a country…" autocomplete="off" />
+          <input id="album-search" class="search" placeholder="Find a country…" autocomplete="off" data-i18n-ph="album.searchPh" />
         </div>
         <div id="album-grid" class="album-grid"></div>
       </div>
@@ -87,8 +90,8 @@
         </div>
         <div id="slots-grid" class="slots-grid"></div>
         <div class="slots-actions">
-          <button id="slots-all" class="btn ghost small">Mark all</button>
-          <button id="slots-none" class="btn ghost small">Clear all</button>
+          <button id="slots-all" class="btn ghost small" data-i18n="slots.all">Mark all</button>
+          <button id="slots-none" class="btn ghost small" data-i18n="slots.none">Clear all</button>
         </div>
       </div>
     </section>
@@ -96,58 +99,58 @@
     <!-- COLLECTION -->
     <section id="view-collection" class="view">
       <div class="toolbar">
-        <input id="search" class="search" placeholder="Search code, team or name…" autocomplete="off" />
+        <input id="search" class="search" placeholder="Search code, team or name…" autocomplete="off" data-i18n-ph="col.searchPh" />
         <select id="sort" class="select">
-          <option value="code">Sort: Code</option>
-          <option value="recent">Sort: Recent</option>
-          <option value="dupes">Sort: Doubles first</option>
+          <option value="code" data-i18n="sort.code">Sort: Code</option>
+          <option value="recent" data-i18n="sort.recent">Sort: Recent</option>
+          <option value="dupes" data-i18n="sort.dupes">Sort: Doubles first</option>
         </select>
       </div>
       <div class="filter-row">
-        <label class="chk"><input type="checkbox" id="only-dupes" /> Only doubles (swaps)</label>
+        <label class="chk"><input type="checkbox" id="only-dupes" /> <span data-i18n="col.onlyDupes">Only doubles (swaps)</span></label>
       </div>
       <div id="collection-list" class="collection"></div>
-      <div id="collection-empty" class="empty">Nothing yet. Add stickers in Quick add or fill the Album.</div>
+      <div id="collection-empty" class="empty" data-i18n="col.emptyNone">Nothing yet. Add stickers in Quick add or fill the Album.</div>
     </section>
 
     <!-- SHARE & BACKUP -->
     <section id="view-backup" class="view">
       <div class="card pad">
-        <h2>Share a list</h2>
-        <p class="muted">Copy a list and paste it to friends (WhatsApp, etc.) so you can spot swaps. Once your album is over half full, the <b>missing</b> list is the shortest to paste.</p>
+        <h2 data-i18n="share.h">Share a list</h2>
+        <p class="muted" data-i18n-html="share.p">Copy a list and paste it to friends (WhatsApp, etc.) so you can spot swaps. Once your album is over half full, the <b>missing</b> list is the shortest to paste.</p>
         <div class="stack">
-          <button id="btn-share-missing" class="btn primary">Share missing</button>
-          <button id="btn-share-have" class="btn ghost">Share what I have</button>
-          <button id="btn-share-spares" class="btn ghost">Share my spares</button>
+          <button id="btn-share-missing" class="btn primary" data-i18n="share.missing">Share missing</button>
+          <button id="btn-share-have" class="btn ghost" data-i18n="share.have">Share what I have</button>
+          <button id="btn-share-spares" class="btn ghost" data-i18n="share.spares">Share my spares</button>
         </div>
       </div>
 
       <div class="card pad">
-        <h2>Profiles</h2>
-        <p class="muted">You're viewing <b id="profile-viewing">My collection</b>. Switch profiles from the menu (☰).</p>
-        <p class="muted small">Paste a list a friend sent you — load it as its own profile to check codes against it, or merge it into the collection you're viewing. A “missing” list is turned into what they actually have automatically.</p>
-        <textarea id="paste-list" class="paste-box" placeholder="Paste a friend's list (or a backup) here…"></textarea>
+        <h2 data-i18n="prof.h">Profiles</h2>
+        <p class="muted" id="profile-viewing-line"></p>
+        <p class="muted small" data-i18n="prof.pastehint">Paste a list a friend sent you — load it as its own profile to check codes against it, or merge it into the collection you're viewing. A “missing” list is turned into what they actually have automatically.</p>
+        <textarea id="paste-list" class="paste-box" placeholder="Paste a friend's list (or a backup) here…" data-i18n-ph="prof.pastePh"></textarea>
         <div class="stack">
-          <button id="btn-paste-new" class="btn primary">Add as new profile</button>
-          <button id="btn-paste-merge" class="btn ghost">Merge into current</button>
+          <button id="btn-paste-new" class="btn primary" data-i18n="prof.addNew">Add as new profile</button>
+          <button id="btn-paste-merge" class="btn ghost" data-i18n="prof.merge">Merge into current</button>
         </div>
         <div class="stack two">
-          <button id="profile-rename" class="btn ghost small">Rename profile</button>
-          <button id="profile-delete" class="btn ghost small">Delete profile</button>
+          <button id="profile-rename" class="btn ghost small" data-i18n="prof.rename">Rename profile</button>
+          <button id="profile-delete" class="btn ghost small" data-i18n="prof.delete">Delete profile</button>
         </div>
       </div>
 
       <div class="card pad">
-        <h2>Backup</h2>
-        <p class="muted">Your collection lives only in this browser. Copy a full backup (doubles included) and keep it somewhere safe — a note to yourself, an email. Paste it back in the box above to restore.</p>
+        <h2 data-i18n="backup.h">Backup</h2>
+        <p class="muted" data-i18n="backup.p">Your collection lives only in this browser. Copy a full backup (doubles included) and keep it somewhere safe — a note to yourself, an email. Paste it back in the box above to restore.</p>
         <div class="stack">
-          <button id="btn-copy-backup" class="btn ghost">Copy full backup</button>
+          <button id="btn-copy-backup" class="btn ghost" data-i18n="backup.copy">Copy full backup</button>
         </div>
         <hr />
-        <button id="btn-wipe" class="btn danger">Erase everything</button>
+        <button id="btn-wipe" class="btn danger" data-i18n="backup.wipe">Erase everything</button>
       </div>
       <div class="card pad muted small">
-        <p><b>Tip:</b> Add this app to your Home Screen for a full-screen, offline experience.</p>
+        <p data-i18n-html="backup.tip"><b>Tip:</b> Add this app to your Home Screen for a full-screen, offline experience.</p>
       </div>
     </section>
   </main>
@@ -156,15 +159,15 @@
   <div id="editor" class="overlay" hidden>
     <div class="sheet">
       <div class="sheet-head">
-        <h2 id="editor-title">Edit sticker</h2>
+        <h2 id="editor-title" data-i18n="editor.title">Edit sticker</h2>
         <button id="editor-close" class="icon-btn" aria-label="Close">✕</button>
       </div>
       <label class="field">
-        <span>Name / note</span>
-        <input id="editor-name" autocomplete="off" placeholder="Player or sticker name" />
+        <span data-i18n="editor.name">Name / note</span>
+        <input id="editor-name" autocomplete="off" placeholder="Player or sticker name" data-i18n-ph="qa.namePh" />
       </label>
       <div class="result-actions">
-        <button id="editor-save" class="btn primary">Save</button>
+        <button id="editor-save" class="btn primary" data-i18n="editor.save">Save</button>
       </div>
     </div>
   </div>

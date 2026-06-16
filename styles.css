@@ -26,20 +26,22 @@ body {
 
 /* Topbar */
 .topbar {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: max(10px, env(safe-area-inset-top)) 16px 10px;
   background: var(--bg-2);
   border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 5;
 }
-.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; min-width: 0; }
-.brand .logo { font-size: 20px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; flex: 1 1 auto; min-width: 0; }
+.brand .logo { font-size: 20px; flex: 0 0 auto; }
+#view-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .profile-chip {
-  font-size: 11px; font-weight: 700; color: var(--muted);
-  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
-  padding: 2px 8px; max-width: 38vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #1a1300;
+  background: var(--warn); border: 1px solid #d68f12; border-radius: 999px;
+  padding: 2px 8px; max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.profile-chip.guest { color: #1a1300; background: var(--warn); border-color: #d68f12; }
+.profile-chip[hidden] { display: none; }
+.topbar-right { flex: 0 0 auto; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .stats { font-size: 12px; color: var(--muted); text-align: right; }
 .menu-btn { background: var(--card); border: 1px solid var(--line); color: var(--text); font-size: 20px; line-height: 1; width: 42px; height: 42px; border-radius: 12px; cursor: pointer; }
@@ -67,6 +69,12 @@ body {
 .menu-profile-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 6px; }
 .menu-profile .select { width: 100%; }
 .menu-sep { height: 1px; background: var(--line); margin: 8px 4px; }
+.menu-lang { display: flex; gap: 8px; padding: 0 12px 4px; }
+.lang-btn {
+  flex: 1; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line);
+  background: var(--card); color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.lang-btn.active { background: var(--primary); border-color: var(--primary-2); color: #fff; }
 
 main { flex: 1; overflow-y: auto; padding-bottom: 56px; }
 .view { display: none; padding: 14px; }
@@ -110,10 +118,11 @@ main { flex: 1; overflow-y: auto; padding-bottom: 56px; }
 .code-input.new { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
 .code-input.dupe { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
 .qa-indicator {
-  flex: 0 0 auto; width: 44px; border-radius: 10px; border: 1px solid var(--line);
-  align-items: center; justify-content: center; font-size: 24px; font-weight: 800;
+  flex: 0 0 auto; width: 44px; border-radius: 10px; border: 1px solid transparent;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 800; visibility: hidden; /* keeps its space */
 }
-.qa-indicator:not([hidden]) { display: flex; }
+.qa-indicator.show { visibility: visible; }
 .qa-indicator.new { background: rgba(47,191,113,.15); color: #6ff0a8; border-color: rgba(47,191,113,.45); }
 .qa-indicator.dupe { background: rgba(245,166,35,.18); color: #ffce7a; border-color: rgba(245,166,35,.45); }
 .qa-clear {
@@ -141,9 +150,6 @@ main { flex: 1; overflow-y: auto; padding-bottom: 56px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .sheet-head h2 { margin: 0; font-size: 18px; }
 
-.banner { padding: 12px; border-radius: 10px; font-weight: 700; text-align: center; margin-top: 10px; }
-.banner.new { background: rgba(47,191,113,.15); color: #6ff0a8; border: 1px solid rgba(47,191,113,.4); }
-.banner.dupe { background: rgba(245,166,35,.15); color: #ffce7a; border: 1px solid rgba(245,166,35,.4); }
 
 /* Collection */
 .toolbar { display: flex; gap: 8px; margin-bottom: 8px; }

@@ -20,26 +20,209 @@ function toast(msg) {
 }
 
 /* ============================================================
+   Internationalisation — English and Brazilian Portuguese.
+   Team codes/numbers are language-neutral, so shared lists parse
+   in either language; only the wording around them changes.
+   ============================================================ */
+const STRINGS = {
+  en: {
+    "menu.viewing": "Viewing",
+    "menu.quickadd": "Quick check & add", "menu.album": "Album",
+    "menu.collection": "Swaps & doubles", "menu.backup": "Share & backup",
+    "title.quickadd": "Quick add", "title.album": "Album",
+    "title.collection": "Swaps & doubles", "title.backup": "Share & backup",
+    "title.default": "Sticker Tracker",
+    "qa.lead": "Grab any card, type its code, and instantly see if it's <b>new</b> or a <b>double</b>. Add it without leaving this screen.",
+    "qa.code": "Code", "qa.codePh": "USA 11",
+    "qa.name": "Name / note (optional)", "qa.namePh": "Player or sticker name",
+    "qa.recent": "Just added",
+    "stats.unique": "unique", "stats.total": "total", "stats.doubles": "doubles",
+    "toast.added": "Added {0}", "toast.double": "{0} → double counted",
+    "toast.invalid": "That doesn't look like a valid code",
+    "album.searchPh": "Find a country…",
+    "slots.all": "Mark all", "slots.none": "Clear all",
+    "slots.complete": "Complete! {0}/{0} ✅",
+    "slots.progress": "{0} of {1} collected · {2} missing",
+    "slots.clearConfirm": "Clear all of {0}? This also removes any doubles.",
+    "col.searchPh": "Search code, team or name…",
+    "sort.code": "Sort: Code", "sort.recent": "Sort: Recent", "sort.dupes": "Sort: Doubles first",
+    "col.onlyDupes": "Only doubles (swaps)",
+    "col.spare": "{0} spare",
+    "col.emptyNone": "Nothing yet. Add stickers in Quick add or fill the Album.",
+    "col.emptyFilter": "No stickers match your filters.",
+    "editor.title": "Edit sticker", "editor.titleCode": "Edit {0}",
+    "editor.name": "Name / note", "editor.save": "Save", "toast.saved": "Saved",
+    "confirm.remove": "Remove {0} from your collection?",
+    "share.h": "Share a list",
+    "share.p": "Copy a list and paste it to friends (WhatsApp, etc.) so you can spot swaps. Once your album is over half full, the <b>missing</b> list is the shortest to paste.",
+    "share.missing": "Share missing", "share.have": "Share what I have", "share.spares": "Share my spares",
+    "prof.h": "Profiles",
+    "prof.viewing": "You're viewing <b>{0}</b>. Switch profiles from the menu (☰).",
+    "prof.pastehint": "Paste a list a friend sent you — load it as its own profile to check codes against it, or merge it into the collection you're viewing. A “missing” list is turned into what they actually have automatically.",
+    "prof.pastePh": "Paste a friend's list (or a backup) here…",
+    "prof.addNew": "Add as new profile", "prof.merge": "Merge into current",
+    "prof.rename": "Rename profile", "prof.delete": "Delete profile",
+    "prof.home": "My collection", "prof.friendDefault": "Friend",
+    "backup.h": "Backup",
+    "backup.p": "Your collection lives only in this browser. Copy a full backup (doubles included) and keep it somewhere safe — a note to yourself, an email. Paste it back in the box above to restore.",
+    "backup.copy": "Copy full backup", "backup.wipe": "Erase everything",
+    "backup.tip": "<b>Tip:</b> Add this app to your Home Screen for a full-screen, offline experience.",
+    "toast.copied": "Copied — paste it to a friend",
+    "toast.selectCopy": "Select all and copy this text",
+    "toast.backupCopied": "Backup copied ({0} stickers) — save it somewhere safe",
+    "toast.pasteFirst": "Paste a list first",
+    "toast.notList": "That doesn't look like a list",
+    "toast.noStickers": "No stickers found",
+    "toast.noCodes": "No sticker codes found in that text",
+    "toast.addedTo": "Added {0} to “{1}”",
+    "prompt.profileName": "Name this profile (e.g. a friend's name):",
+    "toast.loaded": "Loaded {0} into “{1}” — type a code to check it",
+    "prompt.renameProfile": "Profile name:",
+    "toast.renamed": "Renamed",
+    "toast.cantDelete": "You can't delete your own collection",
+    "confirm.deleteProfile": "Delete “{0}” and its list? Your own collection is untouched.",
+    "toast.deleted": "Deleted “{0}”",
+    "confirm.wipe": "Erase your ENTIRE collection? This cannot be undone (copy a backup first).",
+    "toast.wiped": "Collection erased",
+    "share.needHeadMine": "Panini WC 2026 — stickers I still need",
+    "share.needHeadGuest": "Panini WC 2026 — stickers {0} still needs",
+    "share.needNone": "None — the album is complete! 🎉",
+    "share.needFoot": "Missing {0} in total.",
+    "share.haveHeadMine": "Panini WC 2026 — my stickers (1 of each)",
+    "share.haveHeadGuest": "Panini WC 2026 — {0}'s stickers (1 of each)",
+    "share.haveNone": "(none yet)",
+    "share.haveFoot": "{0} different stickers.",
+    "share.spareHeadMine": "Panini WC 2026 — my spares to swap",
+    "share.spareHeadGuest": "Panini WC 2026 — {0}'s spares to swap",
+    "share.spareNone": "No doubles yet.",
+    "share.spareFoot": "{0} spares to give away.",
+  },
+  pt: {
+    "menu.viewing": "Vendo",
+    "menu.quickadd": "Conferir e adicionar", "menu.album": "Álbum",
+    "menu.collection": "Trocas e repetidas", "menu.backup": "Compartilhar e backup",
+    "title.quickadd": "Adicionar", "title.album": "Álbum",
+    "title.collection": "Trocas e repetidas", "title.backup": "Compartilhar",
+    "title.default": "Álbum de Figurinhas",
+    "qa.lead": "Pegue uma figurinha, digite o código e veja na hora se é <b>nova</b> ou <b>repetida</b>. Adicione sem sair desta tela.",
+    "qa.code": "Código", "qa.codePh": "BRA 11",
+    "qa.name": "Nome / nota (opcional)", "qa.namePh": "Nome do jogador ou figurinha",
+    "qa.recent": "Adicionadas agora",
+    "stats.unique": "únicas", "stats.total": "total", "stats.doubles": "repetidas",
+    "toast.added": "{0} adicionada", "toast.double": "{0} → repetida contada",
+    "toast.invalid": "Esse código não parece válido",
+    "album.searchPh": "Procurar país…",
+    "slots.all": "Marcar todas", "slots.none": "Limpar todas",
+    "slots.complete": "Completo! {0}/{0} ✅",
+    "slots.progress": "{0} de {1} coladas · faltam {2}",
+    "slots.clearConfirm": "Limpar tudo de {0}? Isso também remove as repetidas.",
+    "col.searchPh": "Buscar código, time ou nome…",
+    "sort.code": "Ordenar: Código", "sort.recent": "Ordenar: Recentes", "sort.dupes": "Ordenar: Repetidas",
+    "col.onlyDupes": "Só repetidas (trocas)",
+    "col.spare": "{0} p/ trocar",
+    "col.emptyNone": "Nada ainda. Adicione figurinhas em Adicionar ou preencha o Álbum.",
+    "col.emptyFilter": "Nenhuma figurinha encontrada.",
+    "editor.title": "Editar figurinha", "editor.titleCode": "Editar {0}",
+    "editor.name": "Nome / nota", "editor.save": "Salvar", "toast.saved": "Salvo",
+    "confirm.remove": "Remover {0} da sua coleção?",
+    "share.h": "Compartilhar uma lista",
+    "share.p": "Copie uma lista e cole para os amigos (WhatsApp, etc.) para achar trocas. Quando o álbum passa da metade, a lista de <b>faltantes</b> é a menor para colar.",
+    "share.missing": "Compartilhar faltantes", "share.have": "Compartilhar o que tenho", "share.spares": "Compartilhar repetidas",
+    "prof.h": "Perfis",
+    "prof.viewing": "Você está vendo <b>{0}</b>. Troque de perfil pelo menu (☰).",
+    "prof.pastehint": "Cole uma lista que um amigo enviou — carregue como um perfil próprio para conferir, ou junte na coleção que você está vendo. Uma lista de “faltantes” é convertida automaticamente no que a pessoa tem.",
+    "prof.pastePh": "Cole aqui a lista de um amigo (ou um backup)…",
+    "prof.addNew": "Adicionar como novo perfil", "prof.merge": "Juntar no atual",
+    "prof.rename": "Renomear perfil", "prof.delete": "Apagar perfil",
+    "prof.home": "Minha coleção", "prof.friendDefault": "Amigo",
+    "backup.h": "Backup",
+    "backup.p": "Sua coleção fica só neste navegador. Copie um backup completo (com repetidas) e guarde em lugar seguro — uma nota, um e-mail. Cole na caixa acima para restaurar.",
+    "backup.copy": "Copiar backup completo", "backup.wipe": "Apagar tudo",
+    "backup.tip": "<b>Dica:</b> Adicione o app à Tela de Início para usar em tela cheia e offline.",
+    "toast.copied": "Copiado — cole para um amigo",
+    "toast.selectCopy": "Selecione tudo e copie este texto",
+    "toast.backupCopied": "Backup copiado ({0} figurinhas) — guarde em lugar seguro",
+    "toast.pasteFirst": "Cole uma lista primeiro",
+    "toast.notList": "Isso não parece uma lista",
+    "toast.noStickers": "Nenhuma figurinha encontrada",
+    "toast.noCodes": "Nenhum código encontrado nesse texto",
+    "toast.addedTo": "Adicionadas {0} em “{1}”",
+    "prompt.profileName": "Nome do perfil (ex: nome do amigo):",
+    "toast.loaded": "Carregadas {0} em “{1}” — digite um código para conferir",
+    "prompt.renameProfile": "Nome do perfil:",
+    "toast.renamed": "Renomeado",
+    "toast.cantDelete": "Você não pode apagar sua própria coleção",
+    "confirm.deleteProfile": "Apagar “{0}” e a lista dele? Sua coleção não é afetada.",
+    "toast.deleted": "Perfil “{0}” apagado",
+    "confirm.wipe": "Apagar TODA a sua coleção? Não dá para desfazer (copie um backup antes).",
+    "toast.wiped": "Coleção apagada",
+    "share.needHeadMine": "Panini Copa 2026 — figurinhas que faltam pra mim",
+    "share.needHeadGuest": "Panini Copa 2026 — figurinhas que faltam para {0}",
+    "share.needNone": "Nenhuma — álbum completo! 🎉",
+    "share.needFoot": "Faltam {0} no total.",
+    "share.haveHeadMine": "Panini Copa 2026 — minhas figurinhas (1 de cada)",
+    "share.haveHeadGuest": "Panini Copa 2026 — figurinhas de {0} (1 de cada)",
+    "share.haveNone": "(nenhuma ainda)",
+    "share.haveFoot": "{0} figurinhas diferentes.",
+    "share.spareHeadMine": "Panini Copa 2026 — minhas repetidas para troca",
+    "share.spareHeadGuest": "Panini Copa 2026 — repetidas de {0} para troca",
+    "share.spareNone": "Nenhuma repetida ainda.",
+    "share.spareFoot": "{0} repetidas para doar.",
+  },
+};
+let lang = "en";
+let currentView = "album";
+
+function t(key, ...args) {
+  let s = (STRINGS[lang] && STRINGS[lang][key]) ?? STRINGS.en[key] ?? key;
+  args.forEach((a, i) => { s = s.split("{" + i + "}").join(a); });
+  return s;
+}
+
+function initLang() {
+  const saved = localStorage.getItem("lang");
+  lang = saved || ((navigator.language || "").toLowerCase().startsWith("pt") ? "pt" : "en");
+  if (!STRINGS[lang]) lang = "en";
+}
+
+function setLang(l) {
+  if (!STRINGS[l] || l === lang) return;
+  lang = l;
+  localStorage.setItem("lang", lang);
+  applyI18n();
+}
+
+// Translate everything currently on screen — static labels plus the dynamic
+// views that build their own strings.
+function applyI18n() {
+  document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
+  $$("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $$("[data-i18n-html]").forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+  $$("[data-i18n-ph]").forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
+  $$(".lang-btn").forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+  $("#view-title").textContent = t("title." + currentView);
+  renderProfileUI();
+  renderStats();
+  refreshActiveView();
+}
+
+/* ============================================================
    Code parsing — normalize what the user types into "ABC 12"
    ============================================================ */
 
-// Tokens that look like a code but are NOT the identifier.
-const NOISE_WORDS = new Set([
-  "FIFA", "WORLD", "CUP", "PANINI", "OFFICIAL", "LICENSED", "PRODUCT",
-  "USED", "MADE", "IN", "BY", "BRAZIL", "BRASIL", "LTDA", "SPA", "WWW",
-  "COM", "AND", "ALL", "THE", "PARA", "POR", "POOL"
-]);
 const MAX_NUM = 20; // max stickers per team in the album
 
 // Normalize a raw string into "ABC 12" form, or null if it isn't a valid code.
-// Numbers must be 1..20 (FWC 00 is the lone exception).
+// The letters must be a real team/set code (this is also what keeps stray words
+// in pasted text from being mistaken for codes) and the number must be in range
+// — FWC 00 is the lone exception.
 function normalizeCode(raw) {
   if (!raw) return null;
   const m = String(raw).toUpperCase().match(/([A-Z]{2,4})\s*[-·.]?\s*(\d{1,3})/);
   if (!m) return null;
   const letters = m[1];
   const num = parseInt(m[2], 10);
-  if (NOISE_WORDS.has(letters)) return null;
+  if (!TEAM_BY_CODE[letters]) return null;       // not a real team/set code
   const okZero = letters === "FWC" && num === 0; // the unique "00" stamp
   if (!okZero && !(num >= 1 && num <= MAX_NUM)) return null;
   return `${letters} ${num}`;
@@ -280,7 +463,9 @@ async function setQty(code, qty) {
    ============================================================ */
 const recentCodes = []; // codes added this session, most-recent first
 
-// Reflect the new/double state on the input, indicator pill and +1 button.
+// Reflect the new/double state on the input, indicator pill and +1 button. The
+// indicator keeps its space at all times (just toggles visibility) so the input
+// never shifts as you type.
 function setQaState(state, label) {
   const input = $("#qa-code");
   const indicator = $("#qa-indicator");
@@ -289,49 +474,32 @@ function setQaState(state, label) {
   input.classList.toggle("dupe", state === "dupe");
   addBtn.classList.toggle("new", state === "new");
   addBtn.classList.toggle("dupe", state === "dupe");
-  if (state) { indicator.className = "qa-indicator " + state; indicator.textContent = label; indicator.hidden = false; }
-  else { indicator.hidden = true; indicator.textContent = ""; }
+  indicator.className = "qa-indicator" + (state ? " show " + state : "");
+  indicator.textContent = state ? label : "";
 }
 
 async function refreshQaBanner() {
-  const banner = $("#qa-banner");
   const addBtn = $("#qa-add");
   const clearBtn = $("#qa-clear");
   const raw = $("#qa-code").value;
   clearBtn.hidden = !raw;
   const code = normalizeCode(raw);
   if (!code) {
-    banner.hidden = true;
     addBtn.disabled = true;
     setQaState("", "");
     return;
   }
   addBtn.disabled = false;
-  const mine = isHome();
-  const who = profileName(activeProfile);
   const existing = await DB.get(code);
-  if (existing) {
-    const times = existing.qty > 1 ? ` (×${existing.qty})` : "";
-    banner.hidden = false; banner.className = "banner dupe";
-    banner.textContent = mine
-      ? `⚠ DOUBLE — you already have ${code}${times}. It's a swap!`
-      : `⚠ ${who} already has ${code}${times}`;
-    setQaState("dupe", "!");
-  } else {
-    banner.hidden = false; banner.className = "banner new";
-    banner.textContent = mine
-      ? `✅ NEW — ${code} isn't in your collection yet`
-      : `✅ ${who} is missing ${code}`;
-    setQaState("new", "✓");
-  }
+  setQaState(existing ? "dupe" : "new", existing ? "!" : "✓");
 }
 
 async function commitQuickAdd() {
   const code = normalizeCode($("#qa-code").value);
-  if (!code) { toast("That doesn't look like a valid code"); return; }
+  if (!code) { toast(t("toast.invalid")); return; }
   const name = $("#qa-name").value.trim();
   const { wasNew } = await addOrIncrement(code, { name });
-  toast(wasNew ? `Added ${code}` : `${code} → double counted`);
+  toast(wasNew ? t("toast.added", code) : t("toast.double", code));
   pushRecent(code);
   // Reset for the next card — keep the team prefix so the next number is quick.
   $("#qa-code").value = teamOf(code) + " ";
@@ -367,7 +535,7 @@ async function openEditor(code) {
   const item = await DB.get(code);
   if (!item) return;
   editingCode = code;
-  $("#editor-title").textContent = `Edit ${code}`;
+  $("#editor-title").textContent = t("editor.titleCode", code);
   $("#editor-name").value = item.name || "";
   $("#editor").hidden = false;
 }
@@ -384,7 +552,7 @@ async function saveEditor() {
   closeEditor();
   await renderStats();
   rerenderLists();
-  toast("Saved");
+  toast(t("toast.saved"));
 }
 
 /* ============================================================
@@ -397,7 +565,7 @@ async function renderStats() {
   const unique = _cache.length;
   const total = _cache.reduce((s, x) => s + (x.qty || 1), 0);
   const doubles = _cache.reduce((s, x) => s + Math.max(0, (x.qty || 1) - 1), 0);
-  $("#stats").innerHTML = `<b>${unique}</b> unique · <b>${total}</b> total${doubles ? ` · <b>${doubles}</b> doubles` : ""}`;
+  $("#stats").innerHTML = `<b>${unique}</b> ${t("stats.unique")} · <b>${total}</b> ${t("stats.total")}${doubles ? ` · <b>${doubles}</b> ${t("stats.doubles")}` : ""}`;
 }
 
 // Re-render any list currently showing rows (the recents on Quick add, the
@@ -424,7 +592,7 @@ function renderCollection() {
 
   if (!items.length) {
     empty.classList.add("on");
-    empty.textContent = _cache.length ? "No stickers match your filters." : "Nothing yet. Add stickers in Quick add or fill the Album.";
+    empty.textContent = _cache.length ? t("col.emptyFilter") : t("col.emptyNone");
     return;
   }
   empty.classList.remove("on");
@@ -463,7 +631,7 @@ function rowEl(x) {
       <div class="code">${x.code}</div>
       <div class="name">${x.name ? escapeHtml(x.name) : "—"}</div>
     </div>
-    ${qty > 1 ? `<span class="badge dupe">${qty - 1} spare</span>` : ""}
+    ${qty > 1 ? `<span class="badge dupe">${t("col.spare", qty - 1)}</span>` : ""}
     <span class="n">${qty}</span>
     <button class="step plus" data-act="inc" aria-label="Add one">+</button>`;
   row.addEventListener("click", async (e) => {
@@ -473,7 +641,7 @@ function rowEl(x) {
     if (act === "inc") await setQty(x.code, qty + 1);
     else if (act === "dec") {
       // Removing the last copy drops the card entirely — make sure that's intended.
-      if (qty <= 1 && !confirm(`Remove ${x.code} from your collection?`)) return;
+      if (qty <= 1 && !confirm(t("confirm.remove", x.code))) return;
       await setQty(x.code, qty - 1);
     }
     await renderStats();
@@ -560,8 +728,8 @@ function renderSlots() {
   }
   const have = haveCount(code);
   $("#slots-progress").textContent = have === total
-    ? `Complete! ${total}/${total} ✅`
-    : `${have} of ${total} collected · ${total - have} missing`;
+    ? t("slots.complete", total)
+    : t("slots.progress", have, total, total - have);
 }
 
 async function toggleSlot(code, n) {
@@ -581,7 +749,7 @@ function closeSlots() {
 
 async function markAllSlots(have) {
   const code = _slotsTeam;
-  if (!have && !confirm(`Clear all of ${TEAM_BY_CODE[code].name}? This also removes any doubles.`)) return;
+  if (!have && !confirm(t("slots.clearConfirm", TEAM_BY_CODE[code].name))) return;
   for (const n of slotNumbersFor(code)) {
     const full = `${code} ${n}`;
     const existing = await DB.get(full);
@@ -600,7 +768,7 @@ async function markAllSlots(have) {
 async function copyBackup() {
   const items = (await DB.getAll()).map(({ id, profileId, ...rest }) => rest);
   const json = JSON.stringify({ app: "sticker-tracker", version: 1, exported: Date.now(), stickers: items });
-  await shareText(json, `Backup copied (${items.length} stickers) — save it somewhere safe`);
+  await shareText(json, t("toast.backupCopied", items.length));
 }
 
 // Build a plain-text list of the stickers still missing, grouped by team,
@@ -613,31 +781,29 @@ function buildNeedsList() {
     const missing = slotNumbersFor(t.code).filter((n) => !owned[n]);
     if (!missing.length) continue;
     total += missing.length;
-    lines.push(`${t.code} (${t.name}): ${missing.map(slotLabel).join(", ")}`);
+    lines.push(`${t.code}: ${missing.map(slotLabel).join(", ")}`);
   }
-  const header = isHome()
-    ? "Panini WC 2026 — stickers I still need"
-    : `Panini WC 2026 — stickers ${profileName(activeProfile)} still needs`;
-  if (!total) return `${header}\n\nNone — the album is complete! 🎉`;
-  return `${header}\n\n${lines.join("\n")}\n\nMissing ${total} in total.`;
+  const header = isHome() ? t("share.needHeadMine") : t("share.needHeadGuest", profileName(activeProfile));
+  if (!total) return `${header}\n\n${t("share.needNone")}`;
+  return `${header}\n\n${lines.join("\n")}\n\n${t("share.needFoot", total)}`;
 }
 
 // Hand a piece of text off to the user to paste elsewhere (WhatsApp, etc.).
 // Prefer the native share sheet, then the clipboard, and finally drop it into
 // the paste box and select it so it can be copied by hand. No files involved.
-async function shareText(text, okMsg = "Copied — paste it to a friend") {
+async function shareText(text, okMsg) {
   if (navigator.share) {
     try { await navigator.share({ text }); return; }
     catch (err) { if (err && err.name === "AbortError") return; }
   }
-  try { await navigator.clipboard.writeText(text); toast(okMsg); return; }
+  try { await navigator.clipboard.writeText(text); toast(okMsg || t("toast.copied")); return; }
   catch { /* fall through to manual copy */ }
   const box = $("#paste-list");
   if (box) {
     box.value = text;
     box.scrollIntoView({ block: "center" });
     box.focus(); box.select();
-    toast("Select all and copy this text");
+    toast(t("toast.selectCopy"));
   }
 }
 
@@ -663,10 +829,9 @@ function buildHavesText() {
     total += have.length;
     lines.push(`${t.code}: ${have.map(slotLabel).join(", ")}`);
   }
-  const whose = isHome() ? "my" : `${profileName(activeProfile)}'s`;
-  const header = `Panini WC 2026 — ${whose} stickers (1 of each)`;
-  if (!total) return `${header}\n\n(none yet)`;
-  return `${header}\n\n${lines.join("\n")}\n\n${total} different stickers.`;
+  const header = isHome() ? t("share.haveHeadMine") : t("share.haveHeadGuest", profileName(activeProfile));
+  if (!total) return `${header}\n\n${t("share.haveNone")}`;
+  return `${header}\n\n${lines.join("\n")}\n\n${t("share.haveFoot", total)}`;
 }
 
 // Plain-text list of the doubles you can give away, grouped by team. A "×n"
@@ -683,10 +848,9 @@ function buildSparesText() {
     total += slotNumbersFor(t.code).reduce((s, n) => s + Math.max(0, (owned[n] || 0) - 1), 0);
     lines.push(`${t.code}: ${spares.join(", ")}`);
   }
-  const whose = isHome() ? "my" : `${profileName(activeProfile)}'s`;
-  const header = `Panini WC 2026 — ${whose} spares to swap`;
-  if (!total) return `${header}\n\nNo doubles yet.`;
-  return `${header}\n\n${lines.join("\n")}\n\n${total} spares to give away.`;
+  const header = isHome() ? t("share.spareHeadMine") : t("share.spareHeadGuest", profileName(activeProfile));
+  if (!total) return `${header}\n\n${t("share.spareNone")}`;
+  return `${header}\n\n${lines.join("\n")}\n\n${t("share.spareFoot", total)}`;
 }
 
 // Parse a plain-text list back into sticker rows (one of each). Accepts the
@@ -698,8 +862,12 @@ function parsePlainText(text) {
     const grouped = line.match(/^\s*([A-Za-z]{2,4})\b[^:]*:\s*(.+)$/);
     if (grouped && TEAM_BY_CODE[grouped[1].toUpperCase()]) {
       const team = grouped[1].toUpperCase();
-      for (const tok of grouped[2].match(/\d{1,3}/g) || []) {
-        const code = normalizeCode(`${team} ${parseInt(tok, 10)}`);
+      // Take the FIRST number in each comma-separated piece, so a spares list
+      // like "1×2, 5" reads as stickers 1 and 5 (the ×2 is a spare count).
+      for (const piece of grouped[2].split(",")) {
+        const num = piece.match(/\d{1,3}/);
+        if (!num) continue;
+        const code = normalizeCode(`${team} ${parseInt(num[0], 10)}`);
         if (code) codes.add(code);
       }
       continue;
@@ -727,19 +895,20 @@ function allSlotCodes() {
 // null (with a toast) if nothing usable is found.
 function rowsFromText(text) {
   const trimmed = (text || "").trim();
-  if (!trimmed) { toast("Paste a list first"); return null; }
+  if (!trimmed) { toast(t("toast.pasteFirst")); return null; }
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     let data;
-    try { data = JSON.parse(trimmed); } catch { toast("That doesn't look like a list"); return null; }
+    try { data = JSON.parse(trimmed); } catch { toast(t("toast.notList")); return null; }
     const incoming = Array.isArray(data) ? data : data.stickers;
     if (Array.isArray(incoming)) return incoming;
-    toast("No stickers found"); return null;
+    toast(t("toast.noStickers")); return null;
   }
   const mentioned = parsePlainText(trimmed);
-  if (!mentioned.length) { toast("No sticker codes found in that text"); return null; }
+  if (!mentioned.length) { toast(t("toast.noCodes")); return null; }
   // A pasted "missing" list names what they DON'T have — flip it to the haves.
+  // Detect the keyword in either language (missing / need / falta…).
   const header = trimmed.split(/\r?\n/).find((l) => l.trim()) || "";
-  if (/missing|need/i.test(header)) {
+  if (/missing|need|falta/i.test(header)) {
     const seen = new Set(mentioned.map((r) => r.code));
     return allSlotCodes().filter((c) => !seen.has(c)).map((code) => ({ code, qty: 1 }));
   }
@@ -777,7 +946,7 @@ async function importPasteMerge() {
   const n = await applyStickers(rows);
   $("#paste-list").value = "";
   await renderStats(); rerenderLists();
-  toast(`Added ${n} to "${profileName(activeProfile)}"`);
+  toast(t("toast.addedTo", n, profileName(activeProfile)));
 }
 
 // Load a pasted list as a brand-new profile, then jump to Quick add so you can
@@ -785,7 +954,7 @@ async function importPasteMerge() {
 async function importPasteAsProfile() {
   const rows = rowsFromText($("#paste-list").value);
   if (!rows) return;
-  const name = (prompt("Name this profile (e.g. a friend's name):", "Friend") || "").trim();
+  const name = (prompt(t("prompt.profileName"), t("prof.friendDefault")) || "").trim();
   if (!name) return;
   const id = "p" + Date.now().toString(36);
   await DB.putProfile({ id, name, createdAt: Date.now() });
@@ -797,7 +966,7 @@ async function importPasteAsProfile() {
   $("#paste-list").value = "";
   await switchProfile(id);
   switchView("quickadd");
-  toast(`Loaded ${n} into "${name}" — type a code to check it`);
+  toast(t("toast.loaded", n, name));
 }
 
 /* ============================================================
@@ -808,7 +977,14 @@ async function importPasteAsProfile() {
 let profiles = [];                 // [{ id, name, createdAt }]
 let activeProfile = HOME_PROFILE;
 
-function profileName(id) { return profiles.find((p) => p.id === id)?.name || id; }
+// The home profile's stored name is a fixed default; show it in the current
+// language unless the user has renamed it to something of their own.
+const HOME_DEFAULT_NAMES = new Set(["My collection", "Minha coleção"]);
+function profileName(id) {
+  const p = profiles.find((x) => x.id === id);
+  if (id === HOME_PROFILE && (!p || HOME_DEFAULT_NAMES.has(p.name))) return t("prof.home");
+  return p?.name || id;
+}
 function isHome() { return activeProfile === HOME_PROFILE; }
 
 async function loadProfiles() {
@@ -831,17 +1007,18 @@ function renderProfileUI() {
     profiles.forEach((p) => {
       const o = document.createElement("option");
       o.value = p.id;
-      o.textContent = p.id === HOME_PROFILE ? p.name : `👤 ${p.name}`;
+      o.textContent = p.id === HOME_PROFILE ? profileName(p.id) : `👤 ${p.name}`;
       o.selected = p.id === activeProfile;
       sel.appendChild(o);
     });
   }
   const del = $("#profile-delete");
   if (del) del.disabled = isHome();
-  const viewing = $("#profile-viewing");
-  if (viewing) viewing.textContent = profileName(activeProfile);
+  const line = $("#profile-viewing-line");
+  if (line) line.innerHTML = t("prof.viewing", profileName(activeProfile));
+  // The chip only shows when viewing a friend's list — keeps the title roomy.
   const chip = $("#active-profile");
-  if (chip) { chip.textContent = profileName(activeProfile); chip.classList.toggle("guest", !isHome()); }
+  if (chip) { chip.hidden = isHome(); chip.textContent = profileName(activeProfile); }
 }
 
 async function switchProfile(id) {
@@ -867,35 +1044,34 @@ function refreshActiveView() {
 async function renameProfile() {
   const p = profiles.find((x) => x.id === activeProfile);
   if (!p) return;
-  const name = (prompt("Profile name:", p.name) || "").trim();
+  const name = (prompt(t("prompt.renameProfile"), profileName(p.id)) || "").trim();
   if (!name) return;
   p.name = name;
   await DB.putProfile(p);
   profiles = await DB.getProfiles();
   renderProfileUI();
-  toast("Renamed");
+  toast(t("toast.renamed"));
 }
 
 async function deleteProfile() {
-  if (isHome()) { toast("You can't delete your own collection"); return; }
+  if (isHome()) { toast(t("toast.cantDelete")); return; }
   const p = profiles.find((x) => x.id === activeProfile);
   if (!p) return;
-  if (!confirm(`Delete "${p.name}" and its list? Your own collection is untouched.`)) return;
+  if (!confirm(t("confirm.deleteProfile", p.name))) return;
   await DB.delProfile(activeProfile);
   profiles = await DB.getProfiles();
   await switchProfile(HOME_PROFILE);
-  toast(`Deleted "${p.name}"`);
+  toast(t("toast.deleted", p.name));
 }
 
 /* ============================================================
    Navigation
    ============================================================ */
-const VIEW_TITLES = { quickadd: "Quick add", album: "Album", collection: "Swaps & doubles", backup: "Share & backup" };
-
 function switchView(name) {
+  currentView = name;
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + name));
   $$(".menu-item").forEach((m) => m.classList.toggle("active", m.dataset.view === name));
-  $("#view-title").textContent = VIEW_TITLES[name] || "Sticker Tracker";
+  $("#view-title").textContent = t("title." + name) || t("title.default");
   closeMenu();
   if (name === "collection") renderCollection();
   if (name === "album") { $("#slots-panel").hidden = true; $("#album-browse").hidden = false; renderAlbum(); }
@@ -915,13 +1091,17 @@ function closeMenu() { $("#menu").hidden = true; }
 async function main() {
   await DB.open();
   await loadProfiles();
-  renderProfileUI();
+  initLang();
+  applyI18n();
   await renderStats();
 
   // Menu navigation
   $("#menu-btn").addEventListener("click", openMenu);
   $("#menu").addEventListener("click", (e) => { if (e.target.id === "menu") closeMenu(); });
   $$(".menu-item").forEach((m) => m.addEventListener("click", () => switchView(m.dataset.view)));
+
+  // Language
+  $$(".lang-btn").forEach((b) => b.addEventListener("click", () => setLang(b.dataset.lang)));
 
   // Profiles
   $("#profile-select").addEventListener("change", (e) => switchProfile(e.target.value));
@@ -970,10 +1150,10 @@ async function main() {
   // Backup (copy/paste, no files)
   $("#btn-copy-backup").addEventListener("click", copyBackup);
   $("#btn-wipe").addEventListener("click", async () => {
-    if (!confirm("Erase your ENTIRE collection? This cannot be undone (export a backup first).")) return;
+    if (!confirm(t("confirm.wipe"))) return;
     await DB.clear();
     await renderStats(); rerenderLists();
-    toast("Collection erased");
+    toast(t("toast.wiped"));
   });
 
   // Service worker (offline) — optional, ignored if unsupported / file://
