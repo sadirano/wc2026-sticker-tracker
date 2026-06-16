@@ -3,7 +3,7 @@
 /* ============================================================
    Sticker Tracker — Panini FIFA World Cup 2026
    Fully client-side: IndexedDB storage. Quick check & add,
-   photos (cropped) and notes per sticker.
+   with an optional note per sticker.
    ============================================================ */
 
 /* ---------- tiny helpers ---------- */
@@ -126,56 +126,123 @@ function numOf(code) { return parseInt(code.split(" ")[1], 10) || 0; }
 
 /* ============================================================
    Storage — IndexedDB
+
+   Data is split across profiles so you can keep your own album
+   alongside friends' lists (imported from their JSON) and check
+   codes against any of them. Each sticker lives in the "items"
+   store keyed by "<profileId>::<code>" with a profileId index;
+   profiles themselves live in the "profiles" store.
+
+   `DB.profile` selects which collection every read/write targets.
    ============================================================ */
+const HOME_PROFILE = "me";
+
 const DB = {
   _db: null,
+  profile: HOME_PROFILE, // the active collection for get/put/del/getAll
+
   open() {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open("sticker-tracker", 1);
-      req.onupgradeneeded = () => {
+      const req = indexedDB.open("sticker-tracker", 2);
+      req.onupgradeneeded = (e) => {
         const db = req.result;
-        if (!db.objectStoreNames.contains("stickers")) {
-          db.createObjectStore("stickers", { keyPath: "code" });
+        const tx = e.target.transaction;
+        if (!db.objectStoreNames.contains("profiles")) {
+          db.createObjectStore("profiles", { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains("items")) {
+          const items = db.createObjectStore("items", { keyPath: "id" });
+          items.createIndex("profileId", "profileId", { unique: false });
+        }
+        // Always have a home profile.
+        tx.objectStore("profiles").put({ id: HOME_PROFILE, name: "My collection", createdAt: Date.now() });
+        // Migrate the old single-collection store into the home profile.
+        if (db.objectStoreNames.contains("stickers")) {
+          const old = tx.objectStore("stickers");
+          const items = tx.objectStore("items");
+          old.openCursor().onsuccess = (ev) => {
+            const cur = ev.target.result;
+            if (cur) {
+              const s = cur.value;
+              items.put({ ...s, id: HOME_PROFILE + "::" + s.code, profileId: HOME_PROFILE });
+              cur.continue();
+            } else {
+              db.deleteObjectStore("stickers");
+            }
+          };
         }
       };
       req.onsuccess = () => { this._db = req.result; resolve(this._db); };
       req.onerror = () => reject(req.error);
     });
   },
-  _tx(mode) { return this._db.transaction("stickers", mode).objectStore("stickers"); },
+
+  _items(mode) { return this._db.transaction("items", mode).objectStore("items"); },
+  _id(code) { return this.profile + "::" + code; },
+
   getAll() {
     return new Promise((res, rej) => {
-      const r = this._tx("readonly").getAll();
+      const r = this._items("readonly").index("profileId").getAll(IDBKeyRange.only(this.profile));
       r.onsuccess = () => res(r.result || []);
       r.onerror = () => rej(r.error);
     });
   },
   get(code) {
     return new Promise((res, rej) => {
-      const r = this._tx("readonly").get(code);
+      const r = this._items("readonly").get(this._id(code));
       r.onsuccess = () => res(r.result || null);
       r.onerror = () => rej(r.error);
     });
   },
   put(item) {
+    item.profileId = this.profile;
+    item.id = this._id(item.code);
     return new Promise((res, rej) => {
-      const r = this._tx("readwrite").put(item);
+      const r = this._items("readwrite").put(item);
       r.onsuccess = () => res(item);
       r.onerror = () => rej(r.error);
     });
   },
   del(code) {
     return new Promise((res, rej) => {
-      const r = this._tx("readwrite").delete(code);
+      const r = this._items("readwrite").delete(this._id(code));
       r.onsuccess = () => res();
       r.onerror = () => rej(r.error);
     });
   },
   clear() {
+    // Wipe only the active profile's stickers.
     return new Promise((res, rej) => {
-      const r = this._tx("readwrite").clear();
-      r.onsuccess = () => res();
+      const r = this._items("readwrite").index("profileId").openCursor(IDBKeyRange.only(this.profile));
+      r.onsuccess = () => { const c = r.result; if (c) { c.delete(); c.continue(); } else res(); };
       r.onerror = () => rej(r.error);
+    });
+  },
+
+  /* ---- profiles ---- */
+  getProfiles() {
+    return new Promise((res, rej) => {
+      const r = this._db.transaction("profiles", "readonly").objectStore("profiles").getAll();
+      r.onsuccess = () => res(r.result || []);
+      r.onerror = () => rej(r.error);
+    });
+  },
+  putProfile(p) {
+    return new Promise((res, rej) => {
+      const r = this._db.transaction("profiles", "readwrite").objectStore("profiles").put(p);
+      r.onsuccess = () => res(p);
+      r.onerror = () => rej(r.error);
+    });
+  },
+  delProfile(id) {
+    // Remove the profile and every sticker that belongs to it.
+    return new Promise((res, rej) => {
+      const tx = this._db.transaction(["profiles", "items"], "readwrite");
+      tx.objectStore("profiles").delete(id);
+      const cur = tx.objectStore("items").index("profileId").openCursor(IDBKeyRange.only(id));
+      cur.onsuccess = () => { const c = cur.result; if (c) { c.delete(); c.continue(); } };
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
     });
   },
 };
@@ -183,18 +250,17 @@ const DB = {
 /* ============================================================
    Collection operations
    ============================================================ */
-async function addOrIncrement(code, { name = "", photo = "" } = {}) {
+async function addOrIncrement(code, { name = "" } = {}) {
   const existing = await DB.get(code);
   const now = Date.now();
   if (existing) {
     existing.qty = (existing.qty || 1) + 1;
     existing.updatedAt = now;
     if (name) existing.name = name;     // if the user bothered to add it, keep it
-    if (photo) existing.photo = photo;
     await DB.put(existing);
     return { item: existing, wasNew: false };
   }
-  const item = { code, team: teamOf(code), number: numOf(code), qty: 1, name, photo, addedAt: now, updatedAt: now };
+  const item = { code, team: teamOf(code), number: numOf(code), qty: 1, name, addedAt: now, updatedAt: now };
   await DB.put(item);
   return { item, wasNew: true };
 }
@@ -209,182 +275,54 @@ async function setQty(code, qty) {
 }
 
 /* ============================================================
-   Image helpers — load a photo, crop it, store a small JPEG
-   ============================================================ */
-function cropRegion(src, x, y, w, h) {
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(w));
-  c.height = Math.max(1, Math.round(h));
-  c.getContext("2d").drawImage(src, x, y, w, h, 0, 0, c.width, c.height);
-  return c;
-}
-
-function canvasToDataUrl(canvas, max = 640) {
-  const scale = Math.min(1, max / Math.max(canvas.width, canvas.height));
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(canvas.width * scale));
-  c.height = Math.max(1, Math.round(canvas.height * scale));
-  c.getContext("2d").drawImage(canvas, 0, 0, c.width, c.height);
-  return c.toDataURL("image/jpeg", 0.72);
-}
-
-function loadImageToCanvas(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement("canvas");
-      const max = 1600;
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(img.src);
-      resolve(c);
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-/* ============================================================
-   Cropper — modal overlay to keep only the important part
-   ============================================================ */
-const Cropper = {
-  source: null, scale: 1, sel: null, onDone: null, _bound: false,
-
-  open(sourceCanvas, onDone) {
-    this.source = sourceCanvas;
-    this.onDone = onDone;
-    const box = $("#cropper");
-    box.hidden = false;
-
-    const stage = $("#crop-stage");
-    const canvas = $("#crop-canvas");
-    const maxW = stage.clientWidth || Math.min(window.innerWidth - 60, 480);
-    const maxH = Math.round(Math.min(window.innerHeight * 0.55, 520));
-    let dispW = maxW;
-    let dispH = Math.round((sourceCanvas.height / sourceCanvas.width) * dispW);
-    if (dispH > maxH) { dispH = maxH; dispW = Math.round((sourceCanvas.width / sourceCanvas.height) * dispH); }
-    canvas.width = dispW; canvas.height = dispH;
-    canvas.getContext("2d").drawImage(sourceCanvas, 0, 0, dispW, dispH);
-    this.scale = sourceCanvas.width / dispW;
-
-    // default selection: centered box covering most of the photo
-    this.sel = { x: Math.round(dispW * 0.12), y: Math.round(dispH * 0.12), w: Math.round(dispW * 0.76), h: Math.round(dispH * 0.76) };
-    this._drawSel();
-    this._bind();
-  },
-
-  close() { $("#cropper").hidden = true; this.source = null; this.onDone = null; },
-
-  _drawSel() {
-    const s = this.sel, el = $("#crop-sel");
-    el.style.left = s.x + "px"; el.style.top = s.y + "px";
-    el.style.width = s.w + "px"; el.style.height = s.h + "px";
-  },
-
-  _bind() {
-    if (this._bound) return;
-    this._bound = true;
-    const stage = $("#crop-stage");
-    const canvas = $("#crop-canvas");
-    let start = null;
-    const pos = (e) => {
-      const r = canvas.getBoundingClientRect();
-      return {
-        x: Math.max(0, Math.min(canvas.width, e.clientX - r.left)),
-        y: Math.max(0, Math.min(canvas.height, e.clientY - r.top)),
-      };
-    };
-    stage.addEventListener("pointerdown", (e) => {
-      start = pos(e); stage.setPointerCapture(e.pointerId);
-      this.sel = { x: start.x, y: start.y, w: 0, h: 0 }; this._drawSel();
-    });
-    stage.addEventListener("pointermove", (e) => {
-      if (!start) return;
-      const p = pos(e);
-      this.sel = {
-        x: Math.min(start.x, p.x), y: Math.min(start.y, p.y),
-        w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y),
-      };
-      this._drawSel();
-    });
-    stage.addEventListener("pointerup", () => {
-      // ignore tiny accidental selections — keep a sensible default
-      if (this.sel.w < 16 || this.sel.h < 16) {
-        this.sel = { x: Math.round(canvas.width * 0.12), y: Math.round(canvas.height * 0.12), w: Math.round(canvas.width * 0.76), h: Math.round(canvas.height * 0.76) };
-        this._drawSel();
-      }
-      start = null;
-    });
-  },
-
-  useSelection() {
-    if (!this.source) return;
-    const s = this.sel;
-    const crop = cropRegion(this.source, s.x * this.scale, s.y * this.scale, s.w * this.scale, s.h * this.scale);
-    this._finish(canvasToDataUrl(crop));
-  },
-
-  useWhole() {
-    if (!this.source) return;
-    this._finish(canvasToDataUrl(this.source));
-  },
-
-  _finish(dataUrl) {
-    const cb = this.onDone;
-    this.close();
-    cb && cb(dataUrl);
-  },
-};
-
-// Shared entry point: load a picked file and hand it to the cropper.
-async function pickPhoto(file, onDone) {
-  if (!file) return;
-  try {
-    const canvas = await loadImageToCanvas(file);
-    Cropper.open(canvas, onDone);
-  } catch {
-    toast("Couldn't load that image");
-  }
-}
-
-/* ============================================================
    Quick check & add — the fast loop: type, see new/double, add,
    stay on screen, repeat. No navigating away.
    ============================================================ */
-let qaPhoto = "";
 const recentCodes = []; // codes added this session, most-recent first
 
-function setQaPhoto(dataUrl) {
-  qaPhoto = dataUrl || "";
-  const thumb = $("#qa-thumb"), clear = $("#qa-photo-clear");
-  if (qaPhoto) { thumb.src = qaPhoto; thumb.hidden = false; clear.hidden = false; }
-  else { thumb.hidden = true; clear.hidden = true; }
+// Reflect the new/double state on the input, indicator pill and +1 button.
+function setQaState(state, label) {
+  const input = $("#qa-code");
+  const indicator = $("#qa-indicator");
+  const addBtn = $("#qa-add");
+  input.classList.toggle("new", state === "new");
+  input.classList.toggle("dupe", state === "dupe");
+  addBtn.classList.toggle("new", state === "new");
+  addBtn.classList.toggle("dupe", state === "dupe");
+  if (state) { indicator.className = "qa-indicator " + state; indicator.textContent = label; indicator.hidden = false; }
+  else { indicator.hidden = true; indicator.textContent = ""; }
 }
 
 async function refreshQaBanner() {
   const banner = $("#qa-banner");
   const addBtn = $("#qa-add");
-  const dupeBtn = $("#qa-dupe");
-  const code = normalizeCode($("#qa-code").value);
+  const clearBtn = $("#qa-clear");
+  const raw = $("#qa-code").value;
+  clearBtn.hidden = !raw;
+  const code = normalizeCode(raw);
   if (!code) {
-    banner.hidden = true; dupeBtn.hidden = true;
-    addBtn.disabled = true; addBtn.textContent = "Enter a code";
+    banner.hidden = true;
+    addBtn.disabled = true;
+    setQaState("", "");
     return;
   }
   addBtn.disabled = false;
+  const mine = isHome();
+  const who = profileName(activeProfile);
   const existing = await DB.get(code);
   if (existing) {
+    const times = existing.qty > 1 ? ` (×${existing.qty})` : "";
     banner.hidden = false; banner.className = "banner dupe";
-    banner.textContent = `⚠ DOUBLE — you already have ${code}` + (existing.qty > 1 ? ` (×${existing.qty})` : "") + ". It's a swap!";
-    dupeBtn.hidden = false;
-    addBtn.textContent = "Add anyway (+1)";
+    banner.textContent = mine
+      ? `⚠ DOUBLE — you already have ${code}${times}. It's a swap!`
+      : `⚠ ${who} already has ${code}${times}`;
+    setQaState("dupe", "!");
   } else {
     banner.hidden = false; banner.className = "banner new";
-    banner.textContent = `✅ NEW — ${code} isn't in your collection yet`;
-    dupeBtn.hidden = true;
-    addBtn.textContent = "Add to collection";
+    banner.textContent = mine
+      ? `✅ NEW — ${code} isn't in your collection yet`
+      : `✅ ${who} is missing ${code}`;
+    setQaState("new", "✓");
   }
 }
 
@@ -392,11 +330,12 @@ async function commitQuickAdd() {
   const code = normalizeCode($("#qa-code").value);
   if (!code) { toast("That doesn't look like a valid code"); return; }
   const name = $("#qa-name").value.trim();
-  const { wasNew } = await addOrIncrement(code, { name, photo: qaPhoto });
+  const { wasNew } = await addOrIncrement(code, { name });
   toast(wasNew ? `Added ${code}` : `${code} → double counted`);
   pushRecent(code);
-  // Reset for the next card — but stay right here.
-  $("#qa-code").value = ""; $("#qa-name").value = ""; setQaPhoto("");
+  // Reset for the next card — keep the team prefix so the next number is quick.
+  $("#qa-code").value = teamOf(code) + " ";
+  $("#qa-name").value = "";
   await renderStats();
   await refreshQaBanner();
   rerenderLists();
@@ -423,14 +362,6 @@ function renderRecent() {
    Editor — add/replace a photo and edit the note on any sticker
    ============================================================ */
 let editingCode = "";
-let editorPhoto = "";
-
-function setEditorPhoto(dataUrl) {
-  editorPhoto = dataUrl || "";
-  const thumb = $("#editor-thumb"), clear = $("#editor-photo-clear");
-  if (editorPhoto) { thumb.src = editorPhoto; thumb.hidden = false; clear.hidden = false; }
-  else { thumb.hidden = true; clear.hidden = true; }
-}
 
 async function openEditor(code) {
   const item = await DB.get(code);
@@ -438,18 +369,16 @@ async function openEditor(code) {
   editingCode = code;
   $("#editor-title").textContent = `Edit ${code}`;
   $("#editor-name").value = item.name || "";
-  setEditorPhoto(item.photo || "");
   $("#editor").hidden = false;
 }
 
-function closeEditor() { $("#editor").hidden = true; editingCode = ""; editorPhoto = ""; }
+function closeEditor() { $("#editor").hidden = true; editingCode = ""; }
 
 async function saveEditor() {
   if (!editingCode) return;
   const item = await DB.get(editingCode);
   if (!item) { closeEditor(); return; }
   item.name = $("#editor-name").value.trim();
-  item.photo = editorPhoto;
   item.updatedAt = Date.now();
   await DB.put(item);
   closeEditor();
@@ -529,29 +458,23 @@ function rowEl(x) {
   row.className = "row";
   const qty = x.qty || 1;
   row.innerHTML = `
-    <div class="thumb" data-act="edit" title="Edit photo / note">${x.photo ? `<img src="${x.photo}" alt="">` : "🏷️"}</div>
+    <button class="step minus" data-act="dec" aria-label="Remove one">−</button>
     <div class="meta" data-act="edit">
       <div class="code">${x.code}</div>
       <div class="name">${x.name ? escapeHtml(x.name) : "—"}</div>
     </div>
-    <div class="qty">
-      ${qty > 1 ? `<span class="badge dupe">${qty - 1} spare</span>` : ""}
-      <div class="stepper">
-        <button data-act="dec">−</button>
-        <span class="n">${qty}</span>
-        <button data-act="inc">+</button>
-      </div>
-      <button class="del" data-act="del" title="Remove">🗑</button>
-    </div>`;
+    ${qty > 1 ? `<span class="badge dupe">${qty - 1} spare</span>` : ""}
+    <span class="n">${qty}</span>
+    <button class="step plus" data-act="inc" aria-label="Add one">+</button>`;
   row.addEventListener("click", async (e) => {
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (!act) return;
     if (act === "edit") { openEditor(x.code); return; }
     if (act === "inc") await setQty(x.code, qty + 1);
-    else if (act === "dec") await setQty(x.code, qty - 1);
-    else if (act === "del") {
-      if (!confirm(`Remove ${x.code} from your collection?`)) return;
-      await DB.del(x.code);
+    else if (act === "dec") {
+      // Removing the last copy drops the card entirely — make sure that's intended.
+      if (qty <= 1 && !confirm(`Remove ${x.code} from your collection?`)) return;
+      await setQty(x.code, qty - 1);
     }
     await renderStats();
     rerenderLists();
@@ -672,64 +595,302 @@ async function markAllSlots(have) {
 /* ============================================================
    Backup
    ============================================================ */
-function download(filename, text, type = "application/json") {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+// Full backup as copy-pasteable text (includes doubles). Keep it somewhere
+// safe — a note to yourself, an email — and paste it back to restore.
+async function copyBackup() {
+  const items = (await DB.getAll()).map(({ id, profileId, ...rest }) => rest);
+  const json = JSON.stringify({ app: "sticker-tracker", version: 1, exported: Date.now(), stickers: items });
+  await shareText(json, `Backup copied (${items.length} stickers) — save it somewhere safe`);
 }
 
-async function exportJSON() {
-  const items = await DB.getAll();
-  download(`stickers-${new Date().toISOString().slice(0, 10)}.json`,
-    JSON.stringify({ app: "sticker-tracker", version: 1, exported: Date.now(), stickers: items }, null, 2));
-  toast(`Exported ${items.length} stickers`);
+// Build a plain-text list of the stickers still missing, grouped by team,
+// in a friendly form you can paste into a chat to ask friends for swaps.
+function buildNeedsList() {
+  const lines = [];
+  let total = 0;
+  for (const t of TEAMS) {
+    const owned = ownedForTeam(t.code);
+    const missing = slotNumbersFor(t.code).filter((n) => !owned[n]);
+    if (!missing.length) continue;
+    total += missing.length;
+    lines.push(`${t.code} (${t.name}): ${missing.map(slotLabel).join(", ")}`);
+  }
+  const header = isHome()
+    ? "Panini WC 2026 — stickers I still need"
+    : `Panini WC 2026 — stickers ${profileName(activeProfile)} still needs`;
+  if (!total) return `${header}\n\nNone — the album is complete! 🎉`;
+  return `${header}\n\n${lines.join("\n")}\n\nMissing ${total} in total.`;
 }
 
-async function exportCSV() {
-  const items = (await DB.getAll()).sort(cmpCode);
-  const rows = [["code", "team", "number", "qty", "name"]];
-  items.forEach((x) => rows.push([x.code, x.team, x.number, x.qty || 1, (x.name || "").replace(/"/g, '""')]));
-  const csv = rows.map((r) => r.map((v) => `"${v}"`).join(",")).join("\n");
-  download(`stickers-${new Date().toISOString().slice(0, 10)}.csv`, csv, "text/csv");
-  toast("Exported CSV");
+// Hand a piece of text off to the user to paste elsewhere (WhatsApp, etc.).
+// Prefer the native share sheet, then the clipboard, and finally drop it into
+// the paste box and select it so it can be copied by hand. No files involved.
+async function shareText(text, okMsg = "Copied — paste it to a friend") {
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; }
+    catch (err) { if (err && err.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(text); toast(okMsg); return; }
+  catch { /* fall through to manual copy */ }
+  const box = $("#paste-list");
+  if (box) {
+    box.value = text;
+    box.scrollIntoView({ block: "center" });
+    box.focus(); box.select();
+    toast("Select all and copy this text");
+  }
 }
 
-async function importJSON(file) {
-  const text = await file.text();
-  let data;
-  try { data = JSON.parse(text); } catch { toast("Not a valid JSON file"); return; }
-  const incoming = Array.isArray(data) ? data : data.stickers;
-  if (!Array.isArray(incoming)) { toast("No stickers found in file"); return; }
-  let added = 0, merged = 0;
-  for (const raw of incoming) {
+// Share one of the lists the user picks. Missing = what to ask friends for
+// (shortest once the album is >50% done); have = a "1 of each" snapshot others
+// can import to check against; spares = the doubles you can give away.
+function shareList(kind) {
+  const text = kind === "missing" ? buildNeedsList()
+    : kind === "spares" ? buildSparesText()
+    : buildHavesText();
+  return shareText(text);
+}
+
+// Plain-text "1 of each" list: just the codes you own, grouped by team.
+// Doubles/qty are intentionally left out — that stays private to you.
+function buildHavesText() {
+  const lines = [];
+  let total = 0;
+  for (const t of TEAMS) {
+    const owned = ownedForTeam(t.code);
+    const have = slotNumbersFor(t.code).filter((n) => owned[n]);
+    if (!have.length) continue;
+    total += have.length;
+    lines.push(`${t.code}: ${have.map(slotLabel).join(", ")}`);
+  }
+  const whose = isHome() ? "my" : `${profileName(activeProfile)}'s`;
+  const header = `Panini WC 2026 — ${whose} stickers (1 of each)`;
+  if (!total) return `${header}\n\n(none yet)`;
+  return `${header}\n\n${lines.join("\n")}\n\n${total} different stickers.`;
+}
+
+// Plain-text list of the doubles you can give away, grouped by team. A "×n"
+// suffix shows how many spares of that sticker you have (when more than one).
+function buildSparesText() {
+  const lines = [];
+  let total = 0;
+  for (const t of TEAMS) {
+    const owned = ownedForTeam(t.code);
+    const spares = slotNumbersFor(t.code)
+      .filter((n) => (owned[n] || 0) > 1)
+      .map((n) => slotLabel(n) + (owned[n] - 1 > 1 ? `×${owned[n] - 1}` : ""));
+    if (!spares.length) continue;
+    total += slotNumbersFor(t.code).reduce((s, n) => s + Math.max(0, (owned[n] || 0) - 1), 0);
+    lines.push(`${t.code}: ${spares.join(", ")}`);
+  }
+  const whose = isHome() ? "my" : `${profileName(activeProfile)}'s`;
+  const header = `Panini WC 2026 — ${whose} spares to swap`;
+  if (!total) return `${header}\n\nNo doubles yet.`;
+  return `${header}\n\n${lines.join("\n")}\n\n${total} spares to give away.`;
+}
+
+// Parse a plain-text list back into sticker rows (one of each). Accepts the
+// "TEAM: 1, 2, 5" grouped format (with or without a team name in parentheses)
+// and also any loose full codes like "MEX 11" scattered in the text.
+function parsePlainText(text) {
+  const codes = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const grouped = line.match(/^\s*([A-Za-z]{2,4})\b[^:]*:\s*(.+)$/);
+    if (grouped && TEAM_BY_CODE[grouped[1].toUpperCase()]) {
+      const team = grouped[1].toUpperCase();
+      for (const tok of grouped[2].match(/\d{1,3}/g) || []) {
+        const code = normalizeCode(`${team} ${parseInt(tok, 10)}`);
+        if (code) codes.add(code);
+      }
+      continue;
+    }
+    const re = /([A-Za-z]{2,4})\s*[-·.]?\s*(\d{1,3})/g;
+    let m;
+    while ((m = re.exec(line))) {
+      const code = normalizeCode(`${m[1]} ${m[2]}`);
+      if (code) codes.add(code);
+    }
+  }
+  return [...codes].map((code) => ({ code, qty: 1 }));
+}
+
+// Every valid sticker code in the whole checklist — used to invert a "missing"
+// list back into what someone actually has.
+function allSlotCodes() {
+  const all = [];
+  for (const t of TEAMS) for (const n of slotNumbersFor(t.code)) all.push(`${t.code} ${n}`);
+  return all;
+}
+
+// Turn pasted text into sticker rows. Accepts a JSON export, a "1 of each"
+// have-list, or a "missing" list (auto-inverted to what they have). Returns
+// null (with a toast) if nothing usable is found.
+function rowsFromText(text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) { toast("Paste a list first"); return null; }
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    let data;
+    try { data = JSON.parse(trimmed); } catch { toast("That doesn't look like a list"); return null; }
+    const incoming = Array.isArray(data) ? data : data.stickers;
+    if (Array.isArray(incoming)) return incoming;
+    toast("No stickers found"); return null;
+  }
+  const mentioned = parsePlainText(trimmed);
+  if (!mentioned.length) { toast("No sticker codes found in that text"); return null; }
+  // A pasted "missing" list names what they DON'T have — flip it to the haves.
+  const header = trimmed.split(/\r?\n/).find((l) => l.trim()) || "";
+  if (/missing|need/i.test(header)) {
+    const seen = new Set(mentioned.map((r) => r.code));
+    return allSlotCodes().filter((c) => !seen.has(c)).map((code) => ({ code, qty: 1 }));
+  }
+  return mentioned;
+}
+
+// Merge raw sticker rows into the ACTIVE profile. Returns how many landed.
+async function applyStickers(rows) {
+  let n = 0;
+  for (const raw of rows) {
     const code = normalizeCode(raw.code);
     if (!code) continue;
     const existing = await DB.get(code);
     if (existing) {
       existing.qty = Math.max(existing.qty || 1, raw.qty || 1);
       existing.name ||= raw.name || "";
-      existing.photo ||= raw.photo || "";
       existing.updatedAt = Date.now();
-      await DB.put(existing); merged++;
+      await DB.put(existing);
     } else {
       await DB.put({
         code, team: teamOf(code), number: numOf(code),
-        qty: raw.qty || 1, name: raw.name || "", photo: raw.photo || "",
+        qty: raw.qty || 1, name: raw.name || "",
         addedAt: raw.addedAt || Date.now(), updatedAt: Date.now(),
       });
-      added++;
     }
+    n++;
   }
+  return n;
+}
+
+// Merge a pasted list into the profile you're currently viewing.
+async function importPasteMerge() {
+  const rows = rowsFromText($("#paste-list").value);
+  if (!rows) return;
+  const n = await applyStickers(rows);
+  $("#paste-list").value = "";
   await renderStats(); rerenderLists();
-  toast(`Imported — ${added} new, ${merged} merged`);
+  toast(`Added ${n} to "${profileName(activeProfile)}"`);
+}
+
+// Load a pasted list as a brand-new profile, then jump to Quick add so you can
+// start checking codes against it right away.
+async function importPasteAsProfile() {
+  const rows = rowsFromText($("#paste-list").value);
+  if (!rows) return;
+  const name = (prompt("Name this profile (e.g. a friend's name):", "Friend") || "").trim();
+  if (!name) return;
+  const id = "p" + Date.now().toString(36);
+  await DB.putProfile({ id, name, createdAt: Date.now() });
+  profiles = await DB.getProfiles();
+  const prev = DB.profile;
+  DB.profile = id;
+  const n = await applyStickers(rows);
+  DB.profile = prev;
+  $("#paste-list").value = "";
+  await switchProfile(id);
+  switchView("quickadd");
+  toast(`Loaded ${n} into "${name}" — type a code to check it`);
+}
+
+/* ============================================================
+   Profiles — your own album plus friends' lists you've pasted in.
+   `DB.profile` points at whichever one is active; every view reads
+   through it, so checking a friend's list uses the exact same UI.
+   ============================================================ */
+let profiles = [];                 // [{ id, name, createdAt }]
+let activeProfile = HOME_PROFILE;
+
+function profileName(id) { return profiles.find((p) => p.id === id)?.name || id; }
+function isHome() { return activeProfile === HOME_PROFILE; }
+
+async function loadProfiles() {
+  profiles = await DB.getProfiles();
+  if (!profiles.length) {
+    await DB.putProfile({ id: HOME_PROFILE, name: "My collection", createdAt: Date.now() });
+    profiles = await DB.getProfiles();
+  }
+  const saved = localStorage.getItem("activeProfile");
+  activeProfile = profiles.some((p) => p.id === saved) ? saved : HOME_PROFILE;
+  DB.profile = activeProfile;
+}
+
+function renderProfileUI() {
+  // home profile first, then the rest alphabetically
+  profiles.sort((a, b) => (a.id === HOME_PROFILE ? -1 : b.id === HOME_PROFILE ? 1 : a.name.localeCompare(b.name)));
+  const sel = $("#profile-select");
+  if (sel) {
+    sel.innerHTML = "";
+    profiles.forEach((p) => {
+      const o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = p.id === HOME_PROFILE ? p.name : `👤 ${p.name}`;
+      o.selected = p.id === activeProfile;
+      sel.appendChild(o);
+    });
+  }
+  const del = $("#profile-delete");
+  if (del) del.disabled = isHome();
+  const viewing = $("#profile-viewing");
+  if (viewing) viewing.textContent = profileName(activeProfile);
+  const chip = $("#active-profile");
+  if (chip) { chip.textContent = profileName(activeProfile); chip.classList.toggle("guest", !isHome()); }
+}
+
+async function switchProfile(id) {
+  if (!profiles.some((p) => p.id === id)) return;
+  activeProfile = id;
+  DB.profile = id;
+  localStorage.setItem("activeProfile", id);
+  recentCodes.length = 0; // "just added" is per session and per profile
+  renderProfileUI();
+  await renderStats();
+  refreshActiveView();
+}
+
+// Re-render whatever view is on screen after switching profiles.
+function refreshActiveView() {
+  if ($("#view-quickadd").classList.contains("active")) { refreshQaBanner(); renderRecent(); }
+  if ($("#view-collection").classList.contains("active")) renderCollection();
+  if ($("#view-album").classList.contains("active")) {
+    if ($("#slots-panel").hidden) renderAlbum(); else renderSlots();
+  }
+}
+
+async function renameProfile() {
+  const p = profiles.find((x) => x.id === activeProfile);
+  if (!p) return;
+  const name = (prompt("Profile name:", p.name) || "").trim();
+  if (!name) return;
+  p.name = name;
+  await DB.putProfile(p);
+  profiles = await DB.getProfiles();
+  renderProfileUI();
+  toast("Renamed");
+}
+
+async function deleteProfile() {
+  if (isHome()) { toast("You can't delete your own collection"); return; }
+  const p = profiles.find((x) => x.id === activeProfile);
+  if (!p) return;
+  if (!confirm(`Delete "${p.name}" and its list? Your own collection is untouched.`)) return;
+  await DB.delProfile(activeProfile);
+  profiles = await DB.getProfiles();
+  await switchProfile(HOME_PROFILE);
+  toast(`Deleted "${p.name}"`);
 }
 
 /* ============================================================
    Navigation
    ============================================================ */
-const VIEW_TITLES = { quickadd: "Quick add", album: "Album", collection: "Swaps & doubles", backup: "Backup" };
+const VIEW_TITLES = { quickadd: "Quick add", album: "Album", collection: "Swaps & doubles", backup: "Share & backup" };
 
 function switchView(name) {
   $$(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + name));
@@ -753,6 +914,8 @@ function closeMenu() { $("#menu").hidden = true; }
    ============================================================ */
 async function main() {
   await DB.open();
+  await loadProfiles();
+  renderProfileUI();
   await renderStats();
 
   // Menu navigation
@@ -760,31 +923,24 @@ async function main() {
   $("#menu").addEventListener("click", (e) => { if (e.target.id === "menu") closeMenu(); });
   $$(".menu-item").forEach((m) => m.addEventListener("click", () => switchView(m.dataset.view)));
 
+  // Profiles
+  $("#profile-select").addEventListener("change", (e) => switchProfile(e.target.value));
+  $("#profile-rename").addEventListener("click", renameProfile);
+  $("#profile-delete").addEventListener("click", deleteProfile);
+
   // Quick check & add
   $("#qa-code").addEventListener("input", refreshQaBanner);
   $("#qa-code").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !$("#qa-add").disabled) commitQuickAdd();
   });
   $("#qa-add").addEventListener("click", commitQuickAdd);
-  $("#qa-dupe").addEventListener("click", commitQuickAdd);
-  $("#qa-photo").addEventListener("change", (e) => {
-    const f = e.target.files[0]; e.target.value = "";
-    pickPhoto(f, setQaPhoto);
+  $("#qa-clear").addEventListener("click", () => {
+    $("#qa-code").value = "";
+    refreshQaBanner();
+    $("#qa-code").focus();
   });
-  $("#qa-photo-clear").addEventListener("click", () => setQaPhoto(""));
 
-  // Cropper overlay
-  $("#crop-use").addEventListener("click", () => Cropper.useSelection());
-  $("#crop-full").addEventListener("click", () => Cropper.useWhole());
-  $("#crop-cancel").addEventListener("click", () => Cropper.close());
-  $("#cropper").addEventListener("click", (e) => { if (e.target.id === "cropper") Cropper.close(); });
-
-  // Editor overlay (existing sticker: photo + note)
-  $("#editor-photo").addEventListener("change", (e) => {
-    const f = e.target.files[0]; e.target.value = "";
-    pickPhoto(f, setEditorPhoto);
-  });
-  $("#editor-photo-clear").addEventListener("click", () => setEditorPhoto(""));
+  // Editor overlay (existing sticker: note)
   $("#editor-save").addEventListener("click", saveEditor);
   $("#editor-close").addEventListener("click", closeEditor);
   $("#editor").addEventListener("click", (e) => { if (e.target.id === "editor") closeEditor(); });
@@ -802,13 +958,17 @@ async function main() {
   $("#sort").addEventListener("change", renderCollection);
   $("#only-dupes").addEventListener("change", renderCollection);
 
-  // Backup
-  $("#btn-export").addEventListener("click", exportJSON);
-  $("#btn-export-csv").addEventListener("click", exportCSV);
-  $("#import-file").addEventListener("change", (e) => {
-    const f = e.target.files[0]; e.target.value = "";
-    if (f) importJSON(f);
-  });
+  // Share lists (copy / share sheet — no files)
+  $("#btn-share-missing").addEventListener("click", () => shareList("missing"));
+  $("#btn-share-have").addEventListener("click", () => shareList("have"));
+  $("#btn-share-spares").addEventListener("click", () => shareList("spares"));
+
+  // Paste a friend's list
+  $("#btn-paste-new").addEventListener("click", importPasteAsProfile);
+  $("#btn-paste-merge").addEventListener("click", importPasteMerge);
+
+  // Backup (copy/paste, no files)
+  $("#btn-copy-backup").addEventListener("click", copyBackup);
   $("#btn-wipe").addEventListener("click", async () => {
     if (!confirm("Erase your ENTIRE collection? This cannot be undone (export a backup first).")) return;
     await DB.clear();
