@@ -1,7 +1,7 @@
 # Sticker Tracker — Panini FIFA World Cup 2026
 
 A fully client-side web app to track which stickers you own, quickly check any
-card for **new vs. double**, and attach a photo and note to each one. No backend,
+card for **new vs. double**. No backend,
 no account — everything is stored in your browser.
 
 ## What it does
@@ -11,10 +11,6 @@ no account — everything is stored in your browser.
   or **⚠️ DOUBLE** (a swap). Tap **Add to collection** or **It's a double (+1)** —
   and you **stay on the same screen**, ready for the next card. No bouncing
   between views.
-- **Photos & notes** — attach a photo to any sticker (take one with your phone or
-  pick from the library) and add a name/note. A built-in cropper lets you **keep
-  only the important part** of the photo. You can add or edit a photo/note later
-  from the Swaps list too — just tap a sticker.
 - **Album** view: every country as a flag tile with a have/total progress bar.
   Tap one to see its numbered slots (1–N); green = owned, dim = missing. Tap a
   slot to toggle it — the fast way to fill in stickers you already have. Doubles
@@ -75,8 +71,7 @@ npx serve .      # or: python -m http.server
 ## Notes / limitations
 
 - Data lives in this browser's IndexedDB. Clearing site data wipes it, so
-  **export a backup** before switching devices or clearing your browser. Photos
-  are included in the JSON backup.
+  **export a backup** before switching devices or clearing your browser.
 - The full checklist is built in, so the **Album** shows exactly what you own vs.
   what's missing per country.
 
