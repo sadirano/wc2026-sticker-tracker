@@ -112,6 +112,17 @@ main { flex: 1; overflow-y: auto; padding-bottom: 56px; }
 .quick-recent { margin-top: 14px; }
 .quick-recent .collection { gap: 8px; }
 
+/* Missing-number chips shown when only a team code is typed */
+.qa-missing-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 2px; }
+.qa-missing-chips[hidden] { display: none; }
+.qa-chip {
+  background: var(--bg-2); border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 4px 13px; font-size: 13px; font-weight: 700;
+  cursor: pointer; line-height: 1.4; transition: background .1s, border-color .1s, color .1s;
+}
+.qa-chip:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
+.qa-chip:active { background: var(--primary-2); border-color: var(--primary-2); color: #fff; }
+
 /* Quick add entry row: [✓/!] [ code ] [✕] [+1] */
 .qa-entry { display: flex; align-items: stretch; gap: 8px; }
 .qa-entry .code-input { flex: 1; min-width: 0; }

@@ -228,6 +228,14 @@ function normalizeCode(raw) {
   return `${letters} ${num}`;
 }
 
+// Returns the team code if raw is only a team code (no number yet), else null.
+function parseTeamOnly(raw) {
+  if (!raw) return null;
+  const m = String(raw).toUpperCase().trim().match(/^([A-Z]{2,4})$/);
+  if (!m) return null;
+  return TEAM_BY_CODE[m[1]] ? m[1] : null;
+}
+
 /* ---------- the full World Cup 2026 sticker checklist ----------
    FWC = FIFA World Cup special set, CC = Coca-Cola special set.
    `iso` is the ISO-3166 alpha-2 used to build the flag emoji; `flag`
@@ -478,6 +486,28 @@ function setQaState(state, label) {
   indicator.textContent = state ? label : "";
 }
 
+function renderMissingChips(teamCode) {
+  const box = $("#qa-missing-chips");
+  if (!teamCode) { box.hidden = true; box.innerHTML = ""; return; }
+  const slots = slotNumbersFor(teamCode);
+  const owned = new Set(_cache.filter((x) => x.team === teamCode).map((x) => x.number));
+  const missing = slots.filter((n) => !owned.has(n));
+  if (missing.length === 0) { box.hidden = true; box.innerHTML = ""; return; }
+  box.innerHTML = "";
+  missing.forEach((n) => {
+    const chip = document.createElement("button");
+    chip.className = "qa-chip";
+    chip.textContent = slotLabel(n);
+    chip.addEventListener("click", () => {
+      $("#qa-code").value = teamCode + " " + slotLabel(n);
+      refreshQaBanner();
+      $("#qa-code").focus();
+    });
+    box.appendChild(chip);
+  });
+  box.hidden = false;
+}
+
 async function refreshQaBanner() {
   const addBtn = $("#qa-add");
   const clearBtn = $("#qa-clear");
@@ -487,8 +517,10 @@ async function refreshQaBanner() {
   if (!code) {
     addBtn.disabled = true;
     setQaState("", "");
+    renderMissingChips(parseTeamOnly(raw));
     return;
   }
+  renderMissingChips(null);
   addBtn.disabled = false;
   const existing = await DB.get(code);
   setQaState(existing ? "dupe" : "new", existing ? "!" : "✓");
