@@ -34,7 +34,6 @@ const STRINGS = {
     "title.default": "Sticker Tracker",
     "qa.lead": "Grab any card, type its code, and instantly see if it's <b>new</b> or a <b>double</b>. Add it without leaving this screen.",
     "qa.code": "Code", "qa.codePh": "USA 11",
-    "qa.name": "Name / note (optional)", "qa.namePh": "Player or sticker name",
     "qa.recent": "Just added",
     "stats.unique": "unique", "stats.total": "total", "stats.doubles": "doubles",
     "toast.added": "Added {0}", "toast.double": "{0} → double counted",
@@ -44,14 +43,12 @@ const STRINGS = {
     "slots.complete": "Complete! {0}/{0} ✅",
     "slots.progress": "{0} of {1} collected · {2} missing",
     "slots.clearConfirm": "Clear all of {0}? This also removes any doubles.",
-    "col.searchPh": "Search code, team or name…",
+    "col.searchPh": "Search code or team…",
     "sort.code": "Sort: Code", "sort.recent": "Sort: Recent", "sort.dupes": "Sort: Doubles first",
     "col.onlyDupes": "Only doubles (swaps)",
     "col.spare": "{0} spare",
     "col.emptyNone": "Nothing yet. Add stickers in Quick add or fill the Album.",
     "col.emptyFilter": "No stickers match your filters.",
-    "editor.title": "Edit sticker", "editor.titleCode": "Edit {0}",
-    "editor.name": "Name / note", "editor.save": "Save", "toast.saved": "Saved",
     "confirm.remove": "Remove {0} from your collection?",
     "share.h": "Share a list",
     "share.p": "Copy a list and paste it to friends (WhatsApp, etc.) so you can spot swaps. Once your album is over half full, the <b>missing</b> list is the shortest to paste.",
@@ -106,7 +103,6 @@ const STRINGS = {
     "title.default": "Álbum de Figurinhas",
     "qa.lead": "Pegue uma figurinha, digite o código e veja na hora se é <b>nova</b> ou <b>repetida</b>. Adicione sem sair desta tela.",
     "qa.code": "Código", "qa.codePh": "BRA 11",
-    "qa.name": "Nome / nota (opcional)", "qa.namePh": "Nome do jogador ou figurinha",
     "qa.recent": "Adicionadas agora",
     "stats.unique": "únicas", "stats.total": "total", "stats.doubles": "repetidas",
     "toast.added": "{0} adicionada", "toast.double": "{0} → repetida contada",
@@ -116,14 +112,12 @@ const STRINGS = {
     "slots.complete": "Completo! {0}/{0} ✅",
     "slots.progress": "{0} de {1} coladas · faltam {2}",
     "slots.clearConfirm": "Limpar tudo de {0}? Isso também remove as repetidas.",
-    "col.searchPh": "Buscar código, time ou nome…",
+    "col.searchPh": "Buscar código ou time…",
     "sort.code": "Ordenar: Código", "sort.recent": "Ordenar: Recentes", "sort.dupes": "Ordenar: Repetidas",
     "col.onlyDupes": "Só repetidas (trocas)",
     "col.spare": "{0} p/ trocar",
     "col.emptyNone": "Nada ainda. Adicione figurinhas em Adicionar ou preencha o Álbum.",
     "col.emptyFilter": "Nenhuma figurinha encontrada.",
-    "editor.title": "Editar figurinha", "editor.titleCode": "Editar {0}",
-    "editor.name": "Nome / nota", "editor.save": "Salvar", "toast.saved": "Salvo",
     "confirm.remove": "Remover {0} da sua coleção?",
     "share.h": "Compartilhar uma lista",
     "share.p": "Copie uma lista e cole para os amigos (WhatsApp, etc.) para achar trocas. Quando o álbum passa da metade, a lista de <b>faltantes</b> é a menor para colar.",
@@ -441,17 +435,16 @@ const DB = {
 /* ============================================================
    Collection operations
    ============================================================ */
-async function addOrIncrement(code, { name = "" } = {}) {
+async function addOrIncrement(code) {
   const existing = await DB.get(code);
   const now = Date.now();
   if (existing) {
     existing.qty = (existing.qty || 1) + 1;
     existing.updatedAt = now;
-    if (name) existing.name = name;     // if the user bothered to add it, keep it
     await DB.put(existing);
     return { item: existing, wasNew: false };
   }
-  const item = { code, team: teamOf(code), number: numOf(code), qty: 1, name, addedAt: now, updatedAt: now };
+  const item = { code, team: teamOf(code), number: numOf(code), qty: 1, addedAt: now, updatedAt: now };
   await DB.put(item);
   return { item, wasNew: true };
 }
@@ -529,13 +522,11 @@ async function refreshQaBanner() {
 async function commitQuickAdd() {
   const code = normalizeCode($("#qa-code").value);
   if (!code) { toast(t("toast.invalid")); return; }
-  const name = $("#qa-name").value.trim();
-  const { wasNew } = await addOrIncrement(code, { name });
+  const { wasNew } = await addOrIncrement(code);
   toast(wasNew ? t("toast.added", code) : t("toast.double", code));
   pushRecent(code);
   // Reset for the next card — keep the team prefix so the next number is quick.
   $("#qa-code").value = teamOf(code) + " ";
-  $("#qa-name").value = "";
   await renderStats();
   await refreshQaBanner();
   rerenderLists();
@@ -556,35 +547,6 @@ function renderRecent() {
   const items = recentCodes.map((c) => _cache.find((x) => x.code === c)).filter(Boolean);
   head.hidden = items.length === 0;
   items.forEach((x) => box.appendChild(rowEl(x)));
-}
-
-/* ============================================================
-   Editor — add/replace a photo and edit the note on any sticker
-   ============================================================ */
-let editingCode = "";
-
-async function openEditor(code) {
-  const item = await DB.get(code);
-  if (!item) return;
-  editingCode = code;
-  $("#editor-title").textContent = t("editor.titleCode", code);
-  $("#editor-name").value = item.name || "";
-  $("#editor").hidden = false;
-}
-
-function closeEditor() { $("#editor").hidden = true; editingCode = ""; }
-
-async function saveEditor() {
-  if (!editingCode) return;
-  const item = await DB.get(editingCode);
-  if (!item) { closeEditor(); return; }
-  item.name = $("#editor-name").value.trim();
-  item.updatedAt = Date.now();
-  await DB.put(item);
-  closeEditor();
-  await renderStats();
-  rerenderLists();
-  toast(t("toast.saved"));
 }
 
 /* ============================================================
@@ -616,7 +578,7 @@ function renderCollection() {
   let items = _cache.filter((x) => (x.qty || 1) > 0);
   if (onlyDupes) items = items.filter((x) => (x.qty || 1) > 1);
   if (q) items = items.filter((x) =>
-    x.code.includes(q) || (x.name || "").toUpperCase().includes(q) || x.team.includes(q));
+    x.code.includes(q) || x.team.includes(q));
 
   const list = $("#collection-list");
   const empty = $("#collection-empty");
@@ -659,9 +621,8 @@ function rowEl(x) {
   const qty = x.qty || 1;
   row.innerHTML = `
     <button class="step minus" data-act="dec" aria-label="Remove one">−</button>
-    <div class="meta" data-act="edit">
+    <div class="meta">
       <div class="code">${x.code}</div>
-      <div class="name">${x.name ? escapeHtml(x.name) : "—"}</div>
     </div>
     ${qty > 1 ? `<span class="badge dupe">${t("col.spare", qty - 1)}</span>` : ""}
     <span class="n">${qty}</span>
@@ -669,7 +630,6 @@ function rowEl(x) {
   row.addEventListener("click", async (e) => {
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (!act) return;
-    if (act === "edit") { openEditor(x.code); return; }
     if (act === "inc") await setQty(x.code, qty + 1);
     else if (act === "dec") {
       // Removing the last copy drops the card entirely — make sure that's intended.
@@ -956,13 +916,12 @@ async function applyStickers(rows) {
     const existing = await DB.get(code);
     if (existing) {
       existing.qty = Math.max(existing.qty || 1, raw.qty || 1);
-      existing.name ||= raw.name || "";
       existing.updatedAt = Date.now();
       await DB.put(existing);
     } else {
       await DB.put({
         code, team: teamOf(code), number: numOf(code),
-        qty: raw.qty || 1, name: raw.name || "",
+        qty: raw.qty || 1,
         addedAt: raw.addedAt || Date.now(), updatedAt: Date.now(),
       });
     }
@@ -1151,11 +1110,6 @@ async function main() {
     refreshQaBanner();
     $("#qa-code").focus();
   });
-
-  // Editor overlay (existing sticker: note)
-  $("#editor-save").addEventListener("click", saveEditor);
-  $("#editor-close").addEventListener("click", closeEditor);
-  $("#editor").addEventListener("click", (e) => { if (e.target.id === "editor") closeEditor(); });
 
   // Album
   $("#album-search").addEventListener("input", renderAlbum);

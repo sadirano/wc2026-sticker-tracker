@@ -1,5 +1,5 @@
 /* Minimal offline cache for the app shell. */
-const CACHE = "sticker-tracker-v5";
+const CACHE = "sticker-tracker-v6";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {

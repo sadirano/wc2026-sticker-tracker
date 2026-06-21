@@ -55,10 +55,6 @@
           </div>
         </div>
         <div id="qa-missing-chips" class="qa-missing-chips" hidden></div>
-        <label class="field">
-          <span data-i18n="qa.name">Name / note (optional)</span>
-          <input id="qa-name" autocomplete="off" placeholder="Player or sticker name" data-i18n-ph="qa.namePh" />
-        </label>
       </div>
 
       <div class="quick-recent">
@@ -100,7 +96,7 @@
     <!-- COLLECTION -->
     <section id="view-collection" class="view">
       <div class="toolbar">
-        <input id="search" class="search" placeholder="Search code, team or name…" autocomplete="off" data-i18n-ph="col.searchPh" />
+        <input id="search" class="search" placeholder="Search code or team…" autocomplete="off" data-i18n-ph="col.searchPh" />
         <select id="sort" class="select">
           <option value="code" data-i18n="sort.code">Sort: Code</option>
           <option value="recent" data-i18n="sort.recent">Sort: Recent</option>
@@ -155,23 +151,6 @@
       </div>
     </section>
   </main>
-
-  <!-- Edit overlay: note for an existing sticker -->
-  <div id="editor" class="overlay" hidden>
-    <div class="sheet">
-      <div class="sheet-head">
-        <h2 id="editor-title" data-i18n="editor.title">Edit sticker</h2>
-        <button id="editor-close" class="icon-btn" aria-label="Close">✕</button>
-      </div>
-      <label class="field">
-        <span data-i18n="editor.name">Name / note</span>
-        <input id="editor-name" autocomplete="off" placeholder="Player or sticker name" data-i18n-ph="qa.namePh" />
-      </label>
-      <div class="result-actions">
-        <button id="editor-save" class="btn primary" data-i18n="editor.save">Save</button>
-      </div>
-    </div>
-  </div>
 
   <a class="gh-badge" href="https://github.com/sadirano" target="_blank" rel="noopener noreferrer" aria-label="Made by @sadirano on GitHub">
     <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
